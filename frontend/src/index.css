@@ -1,0 +1,214 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root, .theme-default, .theme-light {
+    --background: #FFFDF9;
+    --page-bg: #FFF8F1;
+    --card-bg: #FFFFFF;
+    --card-hover: #FAFAFA;
+    --border: #EADBC8;
+    --border-strong: #DFC7A6;
+    --primary: #FF6B00;
+    --primary-hover: #E55A00;
+    --primary-light-bg: #FFF4E8;
+    --text-primary: #1F1A17;
+    --text-secondary: #6E5C4F;
+    --text-muted: #9A8876;
+    --navbar-bg: #FFFFFF;
+    --navbar-border: #EADBC8;
+    --table-row-1: #FFFFFF;
+    --table-row-2: #FFF8F1;
+    --table-header: #FFF3E6;
+    --success: #2E7D32;
+    --warning: #F57C00;
+    --error: #C62828;
+    --info: #1565C0;
+    
+    --primary-foreground: #FFFFFF;
+    --success-foreground: #FFFFFF;
+    --error-foreground: #FFFFFF;
+    --warning-foreground: #FFFFFF;
+    --info-foreground: #FFFFFF;
+    --secondary: #FFF4E8;
+    --secondary-foreground: #1F1A17;
+    --accent: #FFF8F1;
+    --accent-foreground: #1F1A17;
+    
+    --btn-disabled-bg: #CCCCCC;
+    --btn-disabled-text: #999999;
+    
+    --chart-1: #FF6B00;
+    --chart-2: #42A5F5;
+    --chart-3: #66BB6A;
+    --chart-4: #AB47BC;
+    --chart-5: #EF5350;
+    --chart-6: #FFD54F;
+    
+    --chart-grid: #EADBC8;
+    --chart-tooltip-bg: #FFFFFF;
+    --chart-text: #6E5C4F;
+    --chart-bg: #FFFDF9;
+
+    --foreground: var(--text-primary);
+    --card: var(--card-bg);
+    --card-foreground: var(--text-primary);
+    --popover: var(--card-bg);
+    --popover-foreground: var(--text-primary);
+    
+    --muted: var(--page-bg);
+    --muted-foreground: var(--text-muted);
+    
+    --destructive: var(--error);
+    --destructive-foreground: #ffffff;
+    
+    --input: var(--border);
+    --ring: var(--primary);
+    
+    --radius: 2px;
+  }
+
+  .theme-dark, .dark {
+    --background: #121212;
+    --page-bg: #1A1A1A;
+    --card-bg: #242424;
+    --card-hover: #2B2B2B;
+    --border: #333333;
+    --primary: #FF6B00;
+    --primary-hover: #FF8C3A;
+    --primary-light-bg: #2D1A00;
+    --text-primary: #FFFFFF;
+    --text-secondary: #C7C7C7;
+    --text-muted: #9CA3AF;
+    --navbar-bg: #1A1A1A;
+    --navbar-border: #333333;
+    --table-row-1: #242424;
+    --table-row-2: #2A2A2A;
+    --table-header: #1F1F1F;
+    --success: #4CAF50;
+    --warning: #FF9800;
+    --error: #EF5350;
+    --info: #42A5F5;
+
+    --primary-foreground: #FFFFFF;
+    --success-foreground: #FFFFFF;
+    --error-foreground: #FFFFFF;
+    --warning-foreground: #FFFFFF;
+    --info-foreground: #FFFFFF;
+    --secondary: #1F1F1F;
+    --secondary-foreground: #FFFFFF;
+    --accent: #1A1A1A;
+    --accent-foreground: #FFFFFF;
+
+    --btn-disabled-bg: #333333;
+    --btn-disabled-text: #666666;
+    
+    --chart-1: #FF6B00;
+    --chart-2: #42A5F5;
+    --chart-3: #66BB6A;
+    --chart-4: #AB47BC;
+    --chart-5: #EF5350;
+    --chart-6: #FFD54F;
+    
+    --chart-grid: #444444;
+    --chart-tooltip-bg: #2D2D2D;
+    --chart-text: #C7C7C7;
+    --chart-bg: #242424;
+
+    --foreground: var(--text-primary);
+    --card: var(--card-bg);
+    --card-foreground: var(--text-primary);
+    --popover: var(--card-bg);
+    --popover-foreground: var(--text-primary);
+    
+    --muted: var(--page-bg);
+    --muted-foreground: var(--text-muted);
+    
+    --destructive: var(--error);
+    --destructive-foreground: #ffffff;
+    
+    --input: var(--border);
+    --ring: var(--primary);
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+    border-radius: var(--radius) !important;
+    transition: background-color 300ms ease, color 300ms ease, border-color 300ms ease, box-shadow 300ms ease;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body, #root {
+    background-color: var(--page-bg);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    width: 100%;
+    min-height: 100vh;
+  }
+  
+  /* Recharts customizations */
+  .recharts-tooltip-wrapper .recharts-default-tooltip {
+    background-color: var(--chart-tooltip-bg) !important;
+    border: 1px solid var(--border) !important;
+    color: var(--text-primary) !important;
+  }
+  .recharts-default-tooltip .recharts-tooltip-label {
+    color: var(--text-primary) !important;
+  }
+  .recharts-default-tooltip .recharts-tooltip-item {
+    color: var(--text-secondary) !important;
+  }
+
+  /* Placeholder color */
+  input::placeholder, textarea::placeholder {
+    color: var(--text-muted);
+    opacity: 1;
+  }
+  
+  /* Scrollbar */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}
+
+@layer utilities {
+  /* ── Status Badges ─────────────────────────────── */
+  .badge-success {
+    background-color: #E8F5E9;
+    color: #2E7D32;
+  }
+  .badge-warning {
+    background-color: #FFF3E0;
+    color: #E65100;
+  }
+  .badge-error {
+    background-color: #FFEBEE;
+    color: #C62828;
+  }
+  .badge-info {
+    background-color: #E3F2FD;
+    color: #1565C0;
+  }
+
+  .theme-dark .badge-success, .dark .badge-success {
+    background-color: #1B5E20;
+    color: #81C784;
+  }
+  .theme-dark .badge-warning, .dark .badge-warning {
+    background-color: #2D1A00;
+    color: #FFB74D;
+  }
+  .theme-dark .badge-error, .dark .badge-error {
+    background-color: #3B0000;
+    color: #EF9A9A;
+  }
+  .theme-dark .badge-info, .dark .badge-info {
+    background-color: #0D2137;
+    color: #42A5F5;
+  }
+}
