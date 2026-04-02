@@ -137,7 +137,7 @@ const updateSupply = async (req, res) => {
   res.json({ success: true, data: supply });
 };
 
-// @desc   Delete supply record
+// @desc   Delete supply record (and restore stock to central inventory)
 // @route  DELETE /api/supplies/:id
 const deleteSupply = async (req, res) => {
   const supply = await InventorySupply.findByIdAndDelete(req.params.id);
@@ -147,7 +147,31 @@ const deleteSupply = async (req, res) => {
     await ShopInventory.findOneAndDelete({ supplyId: supply._id });
   }
 
-  res.json({ success: true, message: 'Supply record deleted' });
+  // Restore the stock to CentralInventory
+  const invItem = await CentralInventory.findOne({ batchNo: supply.batch });
+  if (invItem) {
+    invItem.bone += (supply.bone || 0);
+    invItem.boneless += (supply.boneless || 0);
+    invItem.mixed += (supply.mixed || 0);
+    
+    invItem.totalWeight = invItem.bone + invItem.boneless + invItem.mixed + invItem.skin + invItem.meat;
+    
+    // Fetch dynamic prices to calculate new total amount
+    const prices = await getPrices(supply.shopId);
+    
+    // Recalculate remaining inventory value using dynamic prices
+    invItem.totalAmount =
+      invItem.bone     * prices.bone     +
+      invItem.boneless * prices.boneless +
+      invItem.mixed    * prices.mixed    +
+      invItem.skin     * (prices.skin || FALLBACK_PRICES.skin) +
+      invItem.meat     * (prices.meat || FALLBACK_PRICES.meat);
+
+    invItem.status = invItem.totalWeight > 0 ? 'Available' : 'Empty';
+    await invItem.save();
+  }
+
+  res.json({ success: true, message: 'Supply restored to inventory' });
 };
 
 module.exports = { getSupplies, createSupply, updateSupply, deleteSupply };

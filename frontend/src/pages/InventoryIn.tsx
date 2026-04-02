@@ -74,9 +74,9 @@ export default function InventoryIn() {
 
   const totalBone = records.reduce((s, r) => s + (r.bone || 0), 0);
   const totalBoneless = records.reduce((s, r) => s + (r.boneless || 0), 0);
+  const totalMixedStock = records.reduce((s, r) => s + (r.mixed || 0), 0);
+  const totalWeightOverall = records.reduce((s, r) => s + (r.totalWeight || r.total_weight || ((r.bone || 0) + (r.boneless || 0) + (r.mixed || 0) + (r.skin || 0) + (r.meat || 0))), 0);
   const totalValue = records.reduce((s, r) => s + (r.totalAmount || r.total_amount || r.total || 0), 0);
-  
-  const isLowStock = totalBone + totalBoneless + records.reduce((s, r) => s + (r.mixed || 0), 0) < 5;
 
   const handleSave = async () => {
     if (!batch || (!bone && !boneless && !mixed)) {
@@ -227,27 +227,24 @@ export default function InventoryIn() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard 
-          title="Total Stock Value" 
-          value={`₹${totalValue.toLocaleString("en-IN")}`} 
-          icon={<IndianRupee className="h-5 w-5 text-info" />} 
-          color="info" 
+          title="total stock kg/price" 
+          value={`${totalWeightOverall}kg/₹${totalValue.toLocaleString("en-IN")}`} 
+          icon={null}
         />
         <StatCard 
           title="Total Bone Stock" 
           value={`${totalBone} kg`} 
-          icon={<Bone className="h-5 w-5 text-foreground" />} 
+          icon={null}
         />
         <StatCard 
           title="Total Boneless Stock" 
           value={`${totalBoneless} kg`} 
-          icon={<Package className="h-5 w-5 text-foreground" />} 
+          icon={null}
         />
         <StatCard 
-          title="Low Stock Warning" 
-          value={isLowStock ? "Below 5kg!" : "Stock OK"} 
-          icon={<AlertTriangle className="h-5 w-5" />} 
-          color={isLowStock ? "destructive" : "success"}
-          className={isLowStock ? "animate-pulse border-destructive bg-destructive/5" : ""}
+          title="Total mixed stock" 
+          value={`${totalMixedStock} kg`} 
+          icon={null}
         />
       </div>
 

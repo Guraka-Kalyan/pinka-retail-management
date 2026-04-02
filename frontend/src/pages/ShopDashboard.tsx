@@ -138,10 +138,11 @@ export default function ShopDashboard() {
     totalStock: `${(Math.max(0, availBone) + Math.max(0, availBoneless) + Math.max(0, availMixed) + Math.max(0, availFry) + Math.max(0, availCurry)).toLocaleString("en-IN")} kg`,
     cash: `₹${filteredSales.reduce((s: number, r: any) => s + (Number(r.cash) || 0), 0).toLocaleString("en-IN")}`,
     phonepe: `₹${filteredSales.reduce((s: number, r: any) => s + (Number(r.phonePe) || 0), 0).toLocaleString("en-IN")}`,
-    bone: `${Math.max(0, availBone).toLocaleString("en-IN")} kg`,
-    boneless: `${Math.max(0, availBoneless).toLocaleString("en-IN")} kg`,
-    mixed: `${Math.max(0, availMixed).toLocaleString("en-IN")} kg`,
-    monthly: "₹0" // Placeholder as monthly expenses module is separate / not yet fully implemented 
+    boneSold: `${filteredSales.reduce((s: number, r: any) => s + (Number(r.boneSold) || 0), 0).toLocaleString("en-IN")} kg`,
+    bonelessSold: `${filteredSales.reduce((s: number, r: any) => s + (Number(r.bonelessSold) || 0), 0).toLocaleString("en-IN")} kg`,
+    mixedSold: `${filteredSales.reduce((s: number, r: any) => s + (Number(r.mixedSold) || 0), 0).toLocaleString("en-IN")} kg`,
+    frySold: `${filteredSales.reduce((s: number, r: any) => s + (Number(r.frySold) || 0), 0).toLocaleString("en-IN")} kg`,
+    currySold: `${filteredSales.reduce((s: number, r: any) => s + (Number(r.currySold) || 0), 0).toLocaleString("en-IN")} kg`,
   };
 
   const handleExportAnalytics = () => {
@@ -377,9 +378,6 @@ export default function ShopDashboard() {
                  <CardContent className="p-6">
                    <div className="flex justify-between items-center mb-4">
                      <p className="text-sm text-info/80 font-bold tracking-wide uppercase">Total Sales</p>
-                     <div className="w-10 h-10 rounded-full bg-info/10 flex items-center justify-center text-info">
-                       <TrendingUp className="w-5 h-5" />
-                     </div>
                    </div>
                    <h3 className="text-4xl md:text-5xl font-black text-info tracking-tight">{currentKpi.revenue}</h3>
                  </CardContent>
@@ -388,9 +386,6 @@ export default function ShopDashboard() {
                  <CardContent className="p-6">
                    <div className="flex justify-between items-center mb-4">
                      <p className="text-sm text-destructive/80 font-bold tracking-wide uppercase">Total Expenses</p>
-                     <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center text-destructive">
-                       <ArrowDownRight className="w-5 h-5" />
-                     </div>
                    </div>
                    <h3 className="text-4xl md:text-5xl font-black text-destructive tracking-tight">{currentKpi.expenses}</h3>
                    <p className="text-xs text-destructive/60 mt-2 font-medium">Includes Discounts & Operational Cost</p>
@@ -404,88 +399,76 @@ export default function ShopDashboard() {
             {/* Row 2: Secondary Data */}
             <Card className="rounded-sm border border-border bg-card shadow-none hover:bg-card-hover transition-all relative overflow-hidden">
               <div className="absolute top-0 left-0 w-1 h-full bg-insights" />
-              <CardContent className="p-5 flex justify-between items-center pl-6">
+              <CardContent className="p-5 pl-6">
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground font-medium">Total Stock Weight</p>
                   <h3 className="text-2xl font-bold text-foreground tracking-tight">{currentKpi.totalStock}</h3>
-                </div>
-                <div className="p-2 rounded-sm bg-secondary text-insights">
-                  <Package className="w-5 h-5" />
                 </div>
               </CardContent>
             </Card>
 
             <Card className="rounded-sm border border-border bg-card shadow-none hover:bg-card-hover transition-all relative overflow-hidden">
                <div className="absolute top-0 left-0 w-1 h-full bg-muted-foreground" />
-               <CardContent className="p-5 flex justify-between items-center pl-6">
+               <CardContent className="p-5 pl-6">
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground font-medium">Cash Received</p>
                   <h3 className="text-2xl font-bold text-foreground tracking-tight">{currentKpi.cash}</h3>
-                </div>
-                <div className="p-2 rounded-sm bg-secondary text-muted-foreground">
-                  <Wallet className="w-5 h-5" />
                 </div>
               </CardContent>
             </Card>
 
             <Card className="rounded-sm border border-border bg-card shadow-none hover:bg-card-hover transition-all relative overflow-hidden">
               <div className="absolute top-0 left-0 w-1 h-full bg-muted-foreground" />
-              <CardContent className="p-5 flex justify-between items-center pl-6">
+              <CardContent className="p-5 pl-6">
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground font-medium">PhonePe Received</p>
                   <h3 className="text-2xl font-bold text-foreground tracking-tight">{currentKpi.phonepe}</h3>
                 </div>
-                <div className="p-2 rounded-sm bg-secondary text-muted-foreground">
-                  <Smartphone className="w-5 h-5" />
+              </CardContent>
+            </Card>
+
+            {/* Row 3 - Sales Category Breakdown */}
+            <Card className="rounded-sm border-border shadow-none bg-card hover:bg-card-hover transition-colors">
+              <CardContent className="p-5">
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Bone Sold</p>
+                  <h3 className="text-xl font-bold text-foreground">{currentKpi.boneSold}</h3>
                 </div>
               </CardContent>
             </Card>
 
             <Card className="rounded-sm border-border shadow-none bg-card hover:bg-card-hover transition-colors">
-              <CardContent className="p-5 flex justify-between items-center">
+              <CardContent className="p-5">
                 <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground font-medium">Monthly Revenue</p>
-                  <h3 className="text-xl font-bold text-foreground">{currentKpi.monthly}</h3>
-                </div>
-                <div className="w-10 h-10 rounded bg-secondary flex items-center justify-center text-muted-foreground">
-                  <TrendingUp className="w-5 h-5" />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Row 3 */}
-            <Card className="rounded-sm border-border shadow-none bg-card hover:bg-card-hover transition-colors">
-              <CardContent className="p-5 flex justify-between items-center">
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground font-medium">Bone Stock</p>
-                  <h3 className="text-xl font-bold text-foreground">{currentKpi.bone}</h3>
-                </div>
-                <div className="w-10 h-10 rounded bg-secondary flex items-center justify-center text-muted-foreground">
-                  <Bone className="w-5 h-5" />
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Boneless Sold</p>
+                  <h3 className="text-xl font-bold text-foreground">{currentKpi.bonelessSold}</h3>
                 </div>
               </CardContent>
             </Card>
 
             <Card className="rounded-sm border-border shadow-none bg-card hover:bg-card-hover transition-colors">
-              <CardContent className="p-5 flex justify-between items-center">
+              <CardContent className="p-5">
                 <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground font-medium">Boneless Stock</p>
-                  <h3 className="text-xl font-bold text-foreground">{currentKpi.boneless}</h3>
-                </div>
-                <div className="w-10 h-10 rounded bg-secondary flex items-center justify-center text-muted-foreground">
-                  <Bone className="w-5 h-5" />
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Mixed Sold</p>
+                  <h3 className="text-xl font-bold text-foreground">{currentKpi.mixedSold}</h3>
                 </div>
               </CardContent>
             </Card>
 
             <Card className="rounded-sm border-border shadow-none bg-card hover:bg-card-hover transition-colors">
-              <CardContent className="p-5 flex justify-between items-center">
+              <CardContent className="p-5">
                 <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground font-medium">Mixed Stock</p>
-                  <h3 className="text-xl font-bold text-foreground">{currentKpi.mixed}</h3>
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Fry Sold</p>
+                  <h3 className="text-xl font-bold text-foreground">{currentKpi.frySold}</h3>
                 </div>
-                <div className="w-10 h-10 rounded bg-secondary flex items-center justify-center text-muted-foreground">
-                  <Package className="w-5 h-5" />
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-sm border-border shadow-none bg-card hover:bg-card-hover transition-colors">
+              <CardContent className="p-5">
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Curry Sold</p>
+                  <h3 className="text-xl font-bold text-foreground">{currentKpi.currySold}</h3>
                 </div>
               </CardContent>
             </Card>
@@ -588,17 +571,6 @@ export default function ShopDashboard() {
         </div>
       )}
 
-      {/* Footer text */}
-      <div className="text-center pt-8 pb-4 space-y-4">
-        <div className="flex items-center justify-center gap-2 text-[10px] font-extrabold tracking-widest text-muted-foreground uppercase">
-          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-          Authorized Access Only • All Data Isolated to {shopName.toUpperCase()}
-        </div>
-        <div className="flex items-center justify-center gap-5 text-xs font-black tracking-widest text-muted-foreground">
-          <span>PINAKA®</span>
-          <span>ORCHARD OPS™</span>
-        </div>
-      </div>
     </div>
   );
 }

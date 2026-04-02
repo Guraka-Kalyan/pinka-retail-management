@@ -364,12 +364,12 @@ export default function InventoryOut({
          <div>
             <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3">Total Available Stock & Preparation</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              <StatCard title="Overall Total" value={`${totalStock} kg`} color={totalStock < 0 ? "destructive" : "info"} icon={<Package className="h-4 w-4" />} />
-              <StatCard title="Bone Available" value={`${availBone} kg`} color={availBone < 0 ? "destructive" : "success"} icon={<Bone className="h-4 w-4" />} />
-              <StatCard title="Boneless Avail." value={`${availBoneless} kg`} color={availBoneless < 0 ? "destructive" : "success"} icon={<Beef className="h-4 w-4" />} />
-              <StatCard title="Mixed Avail." value={`${availMixed} kg`} color={availMixed < 0 ? "destructive" : "success"} icon={<Package className="h-4 w-4" />} />
-              <StatCard title="Fry Prep." value={`${availFry} kg`} color="info" icon={<Beef className="h-4 w-4" />} />
-              <StatCard title="Curry Prep." value={`${availCurry} kg`} color="info" icon={<CookingPot className="h-4 w-4" />} />
+              <StatCard title="Overall Total" value={`${totalStock} kg`} icon={null} />
+              <StatCard title="Bone Available" value={`${availBone} kg`} icon={null} />
+              <StatCard title="Boneless Avail." value={`${availBoneless} kg`} icon={null} />
+              <StatCard title="Mixed Avail." value={`${availMixed} kg`} icon={null} />
+              <StatCard title="Fry Prep." value={`${availFry} kg`} icon={null} />
+              <StatCard title="Curry Prep." value={`${availCurry} kg`} icon={null} />
             </div>
          </div>
 
@@ -377,12 +377,12 @@ export default function InventoryOut({
          <div>
             <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3">Total Stock Sold</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              <StatCard title="Overall Total Sold" className="bg-card border-dashed" value={`${totalBoneSold + totalBonelessSold + totalMixedSold + totalFrySold + totalCurrySold} kg`} icon={<Package className="h-4 w-4 text-muted-foreground" />} />
-              <StatCard title="Bone Sold" value={`${totalBoneSold} kg`} icon={<Bone className="h-4 w-4 text-muted-foreground" />} />
-              <StatCard title="Boneless Sold" value={`${totalBonelessSold} kg`} icon={<Beef className="h-4 w-4 text-muted-foreground" />} />
-              <StatCard title="Mixed Sold" value={`${totalMixedSold} kg`} icon={<Package className="h-4 w-4 text-muted-foreground" />} />
-              <StatCard title="Fry Sold" value={`${totalFrySold} kg`} icon={<Beef className="h-4 w-4 text-muted-foreground" />} />
-              <StatCard title="Curry Sold" value={`${totalCurrySold} kg`} icon={<CookingPot className="h-4 w-4 text-muted-foreground" />} />
+              <StatCard title="Overall Total Sold" className="bg-card border-dashed" value={`${totalBoneSold + totalBonelessSold + totalMixedSold + totalFrySold + totalCurrySold} kg`} icon={null} />
+              <StatCard title="Bone Sold" value={`${totalBoneSold} kg`} icon={null} />
+              <StatCard title="Boneless Sold" value={`${totalBonelessSold} kg`} icon={null} />
+              <StatCard title="Mixed Sold" value={`${totalMixedSold} kg`} icon={null} />
+              <StatCard title="Fry Sold" value={`${totalFrySold} kg`} icon={null} />
+              <StatCard title="Curry Sold" value={`${totalCurrySold} kg`} icon={null} />
             </div>
          </div>
 
@@ -390,10 +390,10 @@ export default function InventoryOut({
          <div>
             <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3">Total Sales Amount</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard title="Total Amount Received (₹)" value={`₹${(totalCash + totalPhonePe).toLocaleString("en-IN")}`} color="success" icon={<IndianRupee className="h-4 w-4" />} />
-              <StatCard title="Cash Received" value={`₹${totalCash.toLocaleString("en-IN")}`} color="success" icon={<Wallet className="h-4 w-4" />} />
-              <StatCard title="PhonePe Received" value={`₹${totalPhonePe.toLocaleString("en-IN")}`} color="info" icon={<Smartphone className="h-4 w-4" />} />
-              <StatCard title="Discount Given" value={`₹${discountedAmount.toLocaleString("en-IN")}`} color="insights" icon={<TrendingUp className="h-4 w-4" />} />
+              <StatCard title="Total Amount Received (₹)" value={`₹${(totalCash + totalPhonePe).toLocaleString("en-IN")}`} icon={null} />
+              <StatCard title="Cash Received" value={`₹${totalCash.toLocaleString("en-IN")}`} icon={null} />
+              <StatCard title="PhonePe Received" value={`₹${totalPhonePe.toLocaleString("en-IN")}`} icon={null} />
+              <StatCard title="Discount Given" value={`₹${discountedAmount.toLocaleString("en-IN")}`} icon={null} />
             </div>
          </div>
       </div>
@@ -483,6 +483,12 @@ export default function InventoryOut({
                   <span className="font-extrabold uppercase tracking-widest text-lg">Discount Given:</span>
                   <span className="text-3xl font-black flex items-center"><IndianRupee className="w-6 h-6 mr-1" />{discountGivenVal.toLocaleString("en-IN")}</span>
                 </div>
+
+                <div className="p-6 rounded-sm border-2 border-success/20 shadow-none flex justify-between items-center relative overflow-hidden bg-success/5">
+                  <div className="absolute top-0 left-0 w-1.5 h-full bg-success" />
+                  <span className="font-bold text-success/80 justify-start pl-2 uppercase tracking-widest text-sm">Amount Paid</span>
+                  <span className="text-4xl font-black text-success flex items-center tracking-tight"><IndianRupee className="w-8 h-8 mr-1" />{paymentTotal.toLocaleString("en-IN")}</span>
+                </div>
                 
               </div>
             </div>
@@ -567,6 +573,7 @@ export default function InventoryOut({
               { header: "Discount (₹)", accessor: (r: OutRecord) => `₹${(r.discountGiven || 0).toLocaleString("en-IN")}` },
               { header: "Cash (₹)", accessor: (r: OutRecord) => `₹${r.cash.toLocaleString("en-IN")}` },
               { header: "PhonePe (₹)", accessor: (r: OutRecord) => `₹${r.phonePe.toLocaleString("en-IN")}` },
+              { header: "Amount Paid (₹)", accessor: (r: OutRecord) => <strong className="text-primary">₹{(Number(r.cash || 0) + Number(r.phonePe || 0)).toLocaleString("en-IN")}</strong> },
               { 
                 header: "Bill", 
                 accessor: (r: OutRecord) => (

@@ -15,6 +15,7 @@ export default function Supply() {
   const [records, setRecords] = useState<any[]>([]);
   const [shopsList, setShopsList] = useState<any[]>([]);
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
+  const [recordToDelete, setRecordToDelete] = useState<any>(null);
 
   const fetchData = async () => {
     try {
@@ -141,8 +142,9 @@ export default function Supply() {
   const handleDeleteOut = async (r: any) => {
     try {
       await api.delete(`/supplies/${r._id}`);
-      toast({ title: "Deleted", description: "Supply record deleted." });
+      toast({ title: "Restored", description: "Supply deleted and stock moved to Central Inventory." });
       fetchData();
+      setRecordToDelete(null);
     } catch (err) {
       console.error(err);
       toast({ title: "Error", description: "Failed to delete record.", variant: "destructive" });
@@ -291,7 +293,7 @@ export default function Supply() {
             { header: "Actions", accessor: (r) => (
               <div className="flex gap-1">
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEditOut(r)}><Pencil className="h-3.5 w-3.5" /></Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteOut(r)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setRecordToDelete(r)}><Trash2 className="h-3.5 w-3.5" /></Button>
               </div>
             )},
           ]}
@@ -299,6 +301,22 @@ export default function Supply() {
           isLoading={isLoading}
         />
       </div>
+
+      {recordToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-in fade-in">
+          <div className="bg-background rounded-sm shadow-none border w-full max-w-md p-6">
+            <h3 className="text-xl font-bold mb-2">Delete & Move to Inventory</h3>
+            <p className="text-muted-foreground mb-6">
+              Are you sure you want to delete this supply to <strong>{recordToDelete.shopNo}</strong>? The packed stock ({recordToDelete.total} kg) will be moved back to the original batch in Inventory In.
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setRecordToDelete(null)}>Cancel</Button>
+              <Button variant="destructive" onClick={() => handleDeleteOut(recordToDelete)}>Move to Inventory</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       </>
       )}
     </div>

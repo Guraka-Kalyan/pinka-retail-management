@@ -101,26 +101,22 @@ export default function Costs({ shopId }: { shopId?: string }) {
         <StatCard 
           title="Total Costs This Month" 
           value={`₹${totalCostsMonth.toLocaleString("en-IN")}`} 
-          icon={<DollarSign className="h-5 w-5" />} 
-          color="destructive"
+          icon={null}
         />
         <StatCard 
           title="Daily Avg Cost" 
           value={`₹${dailyAvgCost.toLocaleString("en-IN")}`} 
-          icon={<TrendingDown className="h-5 w-5" />} 
-          color="warning"
+          icon={null}
         />
         <StatCard 
           title="Revenue This Month" 
           value={`₹${revenueMonth.toLocaleString("en-IN")}`} 
-          icon={<TrendingUp className="h-5 w-5" />} 
-          color="info"
+          icon={null}
         />
         <StatCard 
           title="Net Profit This Month" 
           value={`₹${netProfitMonth.toLocaleString("en-IN")}`} 
-          icon={<PieChart className="h-5 w-5" />} 
-          color="success"
+          icon={null}
         />
       </div>
 

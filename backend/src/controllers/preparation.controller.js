@@ -8,7 +8,18 @@ const getPreparations = async (req, res) => {
   if (date) query.date = date;
 
   const records = await Preparation.find(query).sort({ createdAt: -1 });
-  res.json({ success: true, data: records });
+  const formattedRecords = records.map(r => {
+    const doc = r.toObject();
+    return {
+      ...doc,
+      fry: doc.fryOutput,
+      curry: doc.curryOutput,
+      fryPrep: doc.fryOutput,
+      curryPrep: doc.curryOutput
+    };
+  });
+  
+  res.json({ success: true, data: formattedRecords });
 };
 
 // @desc   Create preparation entry

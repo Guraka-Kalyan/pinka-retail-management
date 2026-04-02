@@ -34,15 +34,16 @@ export default function StatCard({ title, value, icon, color = "default", subtit
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1 flex-1">
           <div className="flex items-center gap-2 mb-1">
-            <div className={cn("w-2 h-2 rounded-full shrink-0", dotMap[color])} />
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">{title}</p>
           </div>
           <p className={cn("text-2xl font-black text-foreground tracking-tight")}>{value}</p>
           {subtitle && <p className="text-xs text-muted-foreground font-medium mt-1">{subtitle}</p>}
         </div>
-        <div className={cn("p-2.5 rounded-sm bg-secondary/50 border shadow-none transition-transform", colorMap[color])}>
-          {icon}
-        </div>
+        {icon && (
+          <div className={cn("p-2.5 rounded-sm bg-secondary/50 border shadow-none transition-transform", colorMap[color])}>
+            {icon}
+          </div>
+        )}
       </div>
     </div>
   );
