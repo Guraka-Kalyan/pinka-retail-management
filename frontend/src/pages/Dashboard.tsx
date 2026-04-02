@@ -1,525 +1,700 @@
-import { useState, useMemo, useEffect } from "react";
-import Breadcrumb from "@/components/Breadcrumb";
-import { 
-  TrendingUp, ArrowDownRight, Activity, Calendar as CalendarIcon, DownloadCloud,
-  CheckCircle2, DollarSign, Package, AlertCircle, Loader2
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { AdvancedDatePicker } from "@/components/ui/advanced-date-picker";
-import { Label } from "@/components/ui/label";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
+import { AdvancedDatePicker } from "@/components/ui/advanced-date-picker";
+import { Button } from "@/components/ui/button";
+import { AlertTriangle, Loader2 } from "lucide-react";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter
-} from "@/components/ui/dialog";
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
-  LineChart, Line, Cell, LabelList
-} from 'recharts';
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
+  Cell, ComposedChart, Line, ReferenceLine, LabelList,
+  LineChart,
+} from "recharts";
 import api from "@/lib/api";
 
-export default function Dashboard() {
-  const [timeframe, setTimeframe] = useState<"Today" | "This Week" | "This Month" | "Custom">("This Week");
+// ── Default packaging prices (matches batch.controller.js) ─────────────────
+const PKG_PRICES = { bone: 350, boneless: 400, mixed: 380, skin: 50, meat: 450 };
 
+// ── Colours ───────────────────────────────────────────────────────────────────
+const C_PRIMARY = "#FF6B00";
+const C_RED     = "#DC2626";
+const C_BLUE    = "#2563EB";
+const C_GREEN   = "#16A34A";
+const C_ORANGE  = "#F59E0B";
+const C_PURPLE  = "#9333EA";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const rupee = (n: number) => `₹${Math.round(Math.abs(n)).toLocaleString("en-IN")}`;
+const numWeight = (v: any): number => (typeof v === "number" ? v : 0);
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface ShopRec   { _id: string; name: string; }
+interface NoteRec   { _id: string; shopId: { _id: string; name: string } | string; text: string; date: string; }
+interface BatchRec  {
+  _id: string; batchNo: string; animalId: string; animalWeight: number;
+  rate: number; cost: number; date: string; status: string;
+  totalWeight: any; usableMeat: any; wastagePercent: any; head: number; ribs: number; ham: number; offals: number;
+  pkgItems: { bone: number; boneless: number; mixed: number; skin: number; meat: number; };
+}
+interface SupplyRec { _id: string; shopId: { _id: string } | null; externalRecipient: { name: string }; batch: string; total: number; totalAmount: number; date: string; }
+interface SaleRec   { shopId: string; date: string; billId: string; cash: number; phonePe: number; total: number; discountGiven: number; }
+interface CostRec   { shopId: string; date: string; total: number; }
+interface InvInRec  { shopId: string; batch: string; date: string; totalAmount: number; }
+
+// ── Tooltip components ────────────────────────────────────────────────────────
+const WfTooltip = ({ active, payload }: any) => {
+  if (!active || !payload?.length) return null;
+  const d = payload[0]?.payload;
+  const color = d.type === "revenue" ? C_BLUE : d.type === "profit" ? C_GREEN : d.type === "loss" ? C_RED : C_RED;
+  return (
+    <div className="bg-card border border-border rounded-sm p-3 text-xs shadow">
+      <p className="font-bold mb-1">{d.fullLabel}</p>
+      <p style={{ color }}>{d.value < 0 ? "−" : ""}{rupee(d.value)}</p>
+    </div>
+  );
+};
+const DressingTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  
+  const beforePricePerKg = d.before > 0 ? d.beforeCost / d.before : 0;
+  const afterPricePerKg = d.after > 0 ? d.afterValue / d.after : 0;
+  const yieldPct = d.before > 0 ? Math.round((d.after / d.before) * 100) : 0;
+
+  return (
+    <div className="bg-card border border-border rounded-sm p-3 text-xs shadow min-w-[180px]">
+      <p className="font-black text-[10px] uppercase tracking-widest text-muted-foreground mb-2 border-b border-border pb-1">Batch: {label}</p>
+      
+      <div className="space-y-3 mt-2">
+        <div className="space-y-1">
+          <p className="font-bold text-orange-500 uppercase text-[9px] tracking-wider">Before Slaughter</p>
+          <div className="flex justify-between">
+            <span>Weight:</span>
+            <span className="font-bold">{d.before} kg</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Value:</span>
+            <span className="font-bold">{rupee(d.beforeCost)}</span>
+          </div>
+          <div className="flex justify-between text-[10px] text-muted-foreground">
+            <span>Price/kg:</span>
+            <span>{rupee(beforePricePerKg)}</span>
+          </div>
+        </div>
+
+        {d.after > 0 && (
+          <div className="space-y-1 border-t border-border/50 pt-2">
+            <div className="flex justify-between items-center mb-1">
+               <p className="font-bold text-blue-600 uppercase text-[9px] tracking-wider">After Slaughter</p>
+               <span className="bg-blue-100 text-blue-700 text-[9px] px-1 font-black rounded-xs">Yield: {yieldPct}%</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Weight:</span>
+              <span className="font-bold">{d.after} kg</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Value:</span>
+              <span className="font-bold">{rupee(d.afterValue)}</span>
+            </div>
+            <div className="flex justify-between text-[10px] text-muted-foreground">
+              <span>Price/kg:</span>
+              <span>{rupee(afterPricePerKg)}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const GenTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-card border border-border rounded-sm p-3 text-xs shadow min-w-[130px] space-y-1">
+      <p className="font-bold mb-1">{label}</p>
+      {payload.map((p: any) => (
+        <div key={p.name} className="flex justify-between gap-4">
+          <span style={{ color: p.color }}>{p.name}</span>
+          <span className="font-semibold">{p.value?.toLocaleString("en-IN")}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ── Section wrapper ───────────────────────────────────────────────────────────
+const Section = ({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) => (
+  <div className="rounded-sm border border-border bg-card shadow-none overflow-hidden">
+    <div className="border-l-4 border-l-[#FF6B00] px-5 py-3 bg-card">
+      <span className="text-xs font-black tracking-widest uppercase" style={{ color: C_PRIMARY }}>{title}</span>
+      {subtitle && <p className="text-[10px] text-muted-foreground mt-0.5">{subtitle}</p>}
+    </div>
+    <div className="p-5">{children}</div>
+  </div>
+);
+
+const KpiCard = ({
+  label, value, sub, color = "var(--text-primary)", bg,
+}: { label: string; value: string; sub?: string; color?: string; bg?: string; }) => (
+  <div className={cn("rounded-sm border border-border p-4", bg || "bg-background")}>
+    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">{label}</p>
+    <p className="text-2xl font-black" style={{ color }}>{value}</p>
+    {sub && <p className="text-[10px] text-muted-foreground mt-1">{sub}</p>}
+  </div>
+);
+
+const EmptyChart = ({ msg = "No data for selected period" }: { msg?: string }) => (
+  <div className="flex flex-col items-center justify-center h-full text-muted-foreground opacity-60">
+    <AlertTriangle className="w-6 h-6 mb-1" />
+    <p className="text-xs font-bold uppercase tracking-wider">{msg}</p>
+  </div>
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+export default function Dashboard() {
   const todayStr = new Date().toISOString().split("T")[0];
 
-  const [exportFormat, setExportFormat] = useState<"CSV" | "PDF">("CSV");
-  const [exportRange, setExportRange] = useState<"Daily" | "Weekly" | "Monthly" | "Custom">("Daily");
+  // ── State ─────────────────────────────────────────────────────────────────
+  const [timeframe, setTimeframe] = useState<"Today" | "This Week" | "This Month" | "Custom">("This Month");
   const [customStart, setCustomStart] = useState(todayStr);
-  const [customEnd, setCustomEnd] = useState(todayStr);
+  const [customEnd,   setCustomEnd]   = useState(todayStr);
+  const [loading, setLoading]         = useState(true);
+  const [error,   setError]           = useState<string | null>(null);
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [shopsList, setShopsList] = useState<any[]>([]);
-  const [notes, setNotes] = useState<any[]>([]);
-  const [allSales, setAllSales] = useState<any[]>([]);
-  const [allCosts, setAllCosts] = useState<any[]>([]);
-  const [allSupplies, setAllSupplies] = useState<any[]>([]);
-  const [allBatches, setAllBatches] = useState<any[]>([]);
-  const [mainInventory, setMainInventory] = useState<any[]>([]);
+  const [shops,    setShops]    = useState<ShopRec[]>([]);
+  const [notes,    setNotes]    = useState<NoteRec[]>([]);
+  const [batches,  setBatches]  = useState<BatchRec[]>([]);
+  const [supplies, setSupplies] = useState<SupplyRec[]>([]);
+  const [sales,    setSales]    = useState<SaleRec[]>([]);
+  const [costs,    setCosts]    = useState<CostRec[]>([]);
+  const [invIn,    setInvIn]    = useState<InvInRec[]>([]);
 
+  // ── Fetch ─────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const fetchData = async () => {
+    (async () => {
       try {
-        setIsLoading(true);
-        const [shopsRes, notesRes, centralInvRes, suppliesRes, batchesRes] = await Promise.all([
+        setLoading(true);
+        setError(null);
+
+        const [shopsR, notesR, suppliesR, batchesR] = await Promise.all([
           api.get("/shops"),
           api.get("/shops/notes/all"),
-          api.get("/central-inventory"),
           api.get("/supplies"),
           api.get("/batches"),
         ]);
-        
-        const shops = shopsRes.data.data || [];
-        setShopsList(shops);
-        setNotes(notesRes.data.data || []);
-        setMainInventory(centralInvRes.data.data || []);
-        setAllSupplies(suppliesRes.data.data || []);
-        setAllBatches(batchesRes.data.data || []);
 
-        // Fetch sales & costs for all shops
-        const salesPromises = shops.map((s: any) => api.get(`/shops/${s._id}/sales`));
-        const prepPromises = shops.map((s: any) => api.get(`/shops/${s._id}/preparations`));
-        const costsPromises = shops.map((s: any) => api.get(`/shops/${s._id}/daily-costs`));
+        const shopList: ShopRec[] = shopsR.data.data || [];
+        setShops(shopList);
+        setNotes(notesR.data.data || []);
+        setSupplies(suppliesR.data.data || []);
+        setBatches(batchesR.data.data || []);
 
-        const salesResults = await Promise.all(salesPromises);
-        const prepResults = await Promise.all(prepPromises);
-        const costsResults = await Promise.all(costsPromises);
+        // Log API samples as required
+        console.log("[Dashboard] /api/supplies sample:", (suppliesR.data.data || [])[0]);
+        console.log("[Dashboard] /api/batches  sample:", (batchesR.data.data  || [])[0]);
 
-        // Combine sales & preps as "inventory out" per previous logic
-        const combinedSales = salesResults.flatMap((res, idx) => {
-          const shopSales = res.data.data || [];
-          const shopPreps = prepResults[idx].data.data || [];
-          return [...shopSales, ...shopPreps];
-        });
-        
-        const combinedCosts = costsResults.flatMap((res) => res.data.data || []);
+        const perShop = await Promise.all(
+          shopList.map(s =>
+            Promise.all([
+              api.get(`/shops/${s._id}/sales`),
+              api.get(`/shops/${s._id}/daily-costs`),
+              api.get(`/shops/${s._id}/inventory-in`),
+            ]).then(([sR, cR, iR]) => ({
+              shopId: s._id,
+              sales:  sR.data.data || [],
+              costs:  cR.data.data || [],
+              invIn:  iR.data.data || [],
+            }))
+          )
+        );
 
-        setAllSales(combinedSales);
-        setAllCosts(combinedCosts);
-      } catch (err) {
-        console.error("Dashboard error", err);
+        const allSales  = perShop.flatMap(r => r.sales.map((s: any)  => ({ ...s, shopId: r.shopId })));
+        const allCosts  = perShop.flatMap(r => r.costs.map((c: any)  => ({ ...c, shopId: r.shopId })));
+        const allInvIn  = perShop.flatMap(r => r.invIn.map((i: any)  => ({ ...i, shopId: r.shopId })));
+
+        console.log("[Dashboard] sales  sample:", allSales[0]);
+        console.log("[Dashboard] costs  sample:", allCosts[0]);
+        console.log("[Dashboard] invIn  sample:", allInvIn[0]);
+
+        setSales(allSales);
+        setCosts(allCosts);
+        setInvIn(allInvIn);
+      } catch (e: any) {
+        setError(e?.response?.data?.message || "Failed to load dashboard data.");
       } finally {
-        setIsLoading(false);
+        setLoading(false);
       }
-    };
-    fetchData();
+    })();
   }, []);
 
-  const groupedNotes = useMemo(() => {
-    const groups: any[] = [];
-    shopsList.forEach((shop: any) => {
-      const shopNotes = notes.filter((n: any) => n.shopId === shop._id || (n.shopId && n.shopId._id === shop._id));
-      if (shopNotes.length > 0) {
-        groups.push({ shop, notes: shopNotes });
-      }
-    });
-    return groups;
-  }, [notes, shopsList]);
-
-  const filterByDateRange = (records: any[], dateField: string = "date") => {
+  // ── Date range ────────────────────────────────────────────────────────────
+  const dateRange = useMemo(() => {
     const now = new Date();
-    return records.filter(r => {
-      const recDate = r[dateField];
-      if (!recDate) return false;
-      if (timeframe === "Today") return recDate === todayStr;
-      if (timeframe === "This Week") {
-        const pastWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-        return recDate >= pastWeek;
-      }
-      if (timeframe === "This Month") {
-        const pastMonth = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-        return recDate >= pastMonth;
-      }
-      if (timeframe === "Custom") return recDate >= customStart && recDate <= customEnd;
-      return false;
-    });
-  };
+    if (timeframe === "Today")      return { from: todayStr, to: todayStr };
+    if (timeframe === "This Week")  return { from: new Date(now.getTime() - 7  * 86400000).toISOString().split("T")[0], to: todayStr };
+    if (timeframe === "This Month") return { from: new Date(now.getTime() - 30 * 86400000).toISOString().split("T")[0], to: todayStr };
+    return { from: customStart, to: customEnd };
+  }, [timeframe, customStart, customEnd, todayStr]);
 
-  const {
-    netResult, shopSales, othersSales, totalSales, totalDiscount, operationalCost,
-    totalExpenses, shopNet, totalInventorySales, trendData, breakdownData, inventoryFlow
-  } = useMemo(() => {
-    let sumShopSales = 0;
-    let sumDiscount = 0;
-    let sumOpCost = 0;
+  const inRange = useCallback((d: string) => !!d && d >= dateRange.from && d <= dateRange.to, [dateRange]);
 
-    const filteredOut = filterByDateRange(allSales).filter(r => !String(r.billId || r.refId).startsWith("PREP"));
-    sumShopSales = filteredOut.reduce((s: number, r: any) => s + (Number(r.total) || 0), 0);
-    sumDiscount = filteredOut.reduce((s: number, r: any) => s + (Number(r.discountGiven) || 0), 0);
+  // ── Filtered subsets ──────────────────────────────────────────────────────
+  const fBatches  = useMemo(() => batches.filter(b => inRange(b.date)),              [batches,  inRange]);
+  const fSupplies = useMemo(() => supplies.filter(s => inRange(s.date)),             [supplies, inRange]);
+  const fSales    = useMemo(() => sales.filter(s => inRange(s.date) && !String(s.billId || "").startsWith("PREP")), [sales, inRange]);
+  const fCosts    = useMemo(() => costs.filter(c => inRange(c.date)),                [costs,    inRange]);
+  const fInvIn    = useMemo(() => invIn.filter(i => inRange(i.date)),                [invIn,    inRange]);
 
-    const filteredCosts = filterByDateRange(allCosts);
-    sumOpCost = filteredCosts.reduce((s: number, r: any) => s + (Number(r.total) || 0), 0);
+  // ── SECTION 1 — Cost to Revenue Pipeline ──────────────────────────────────
+  const pipeline = useMemo(() => {
+    const rawCost      = fBatches.reduce((a, b) => a + (b.cost || 0), 0);
+    const extSupply    = fSupplies.filter(s => !s.shopId && s.externalRecipient?.name).reduce((a, s) => a + (s.totalAmount || 0), 0);
+    const opCost       = fCosts.reduce((a, c) => a + (c.total || 0), 0);
+    const discount     = fSales.reduce((a, s) => a + (s.discountGiven || 0), 0);
+    const selling      = fSales.reduce((a, s) => a + (s.total        || 0), 0);
+    const netProfit    = selling - (rawCost + extSupply + opCost + discount);
+    const combinedExp  = extSupply + opCost + discount;
 
-    const filteredSupply = filterByDateRange(allSupplies);
-    // Previously: r.shopNo starting with "Others". In backend we use `externalRecipient`
-    let sumOthersSales = filteredSupply
-      .filter((r: any) => !r.shopId || r.externalRecipient?.name)
-      .reduce((s: number, r: any) => s + (Number(r.totalAmount) || 0), 0);
-
-    const tSales = sumShopSales + sumOthersSales;
-    const nSales = tSales - sumDiscount;
-    const fResult = nSales - sumOpCost;
-    
-    // Generate trend data grouped by day
-    const trendMap: Record<string, number> = {};
-    const days = filterByDateRange(allSales).map(r => r.date);
-    const uniqueDays = Array.from(new Set(days)).sort();
-    
-    uniqueDays.forEach(d => {
-      const daySales = allSales.filter(s => s.date === d && !String(s.billId || s.refId).startsWith("PREP"));
-      const dayCosts = allCosts.filter(c => c.date === d);
-      const dayRev = daySales.reduce((acc, sale) => acc + (sale.total || 0), 0);
-      const dayExp = daySales.reduce((acc, sale) => acc + (sale.discountGiven || 0), 0) + 
-                     dayCosts.reduce((acc, cost) => acc + (cost.total || 0), 0);
-      trendMap[d] = dayRev - dayExp;
-    });
-
-    const chartTrend = uniqueDays.length > 0 
-      ? uniqueDays.map(d => ({ name: d.substring(5), Profit_Loss: trendMap[d] }))
-      : [
-          { name: 'Start', Profit_Loss: 0 },
-          { name: 'Mid', Profit_Loss: fResult * 0.4 },
-          { name: 'Current', Profit_Loss: fResult }
-        ];
-    
-    const chartBreakdown = [
-      { name: 'Sales', Value: tSales },
-      { name: 'Expenses', Value: sumDiscount + sumOpCost }
+    const waterfall = [
+      { name: "Raw Cost",    value: rawCost,   type: "cost",                          fullLabel: "Total Raw Cost" },
+      { name: "Supply",      value: extSupply, type: "cost",                          fullLabel: "External Supply" },
+      { name: "Operational", value: opCost,    type: "cost",                          fullLabel: "Operational Cost" },
+      { name: "Discount",    value: discount,  type: "cost",                          fullLabel: "Discount Given" },
+      { name: "Selling Price", value: selling, type: "revenue",                       fullLabel: "Total Sales Revenue" },
+      { name: "Profit",        value: netProfit, type: netProfit >= 0 ? "profit" : "loss", fullLabel: "Net Profit / Loss" },
     ];
 
-    const chartFlow = [
-      { name: 'Stock In', Value: mainInventory.length * 50 }, // Arbitrary estimation until full flow is established
-      { name: 'Stock Out', Value: sumShopSales > 0 ? sumShopSales / 400 : 0 }
-    ];
+    return { rawCost, combinedExp, selling, netProfit, waterfall };
+  }, [fBatches, fSupplies, fCosts, fSales]);
 
-    return {
-      totalSales: tSales,
-      shopSales: sumShopSales,
-      othersSales: sumOthersSales,
-      totalDiscount: sumDiscount,
-      operationalCost: sumOpCost,
-      netSales: nSales,
-      shopNet: sumShopSales - sumDiscount,
-      totalInventorySales: (sumShopSales - sumDiscount) + sumOthersSales,
-      netResult: fResult,
-      totalExpenses: sumDiscount + sumOpCost,
-      trendData: chartTrend,
-      breakdownData: chartBreakdown,
-      inventoryFlow: chartFlow
-    };
-  }, [timeframe, customStart, customEnd, todayStr, allSales, allCosts, allSupplies, mainInventory]);
+  // ── SECTION 2 — Dressing ──────────────────────────────────────────────────
+  const dressing = useMemo(() => {
+    const beforeKg    = fBatches.reduce((a, b) => a + (b.animalWeight || 0), 0);
+    const beforeValue = fBatches.reduce((a, b) => a + (b.cost || 0), 0);  // total purchase cost
 
-  const handleExportAnalytics = () => {
-    alert(`Exporting Global Analytics (${exportRange}) in ${exportFormat} format!`);
-  };
+    const slaughtered = fBatches.filter(b => b.status === "Slaughtered" || b.status === "Packed");
+    const afterKg     = slaughtered.reduce((a, b) => a + numWeight(b.totalWeight), 0);
+    const afterValue  = slaughtered.reduce((a, b) => a + numWeight(b.totalWeight) * (b.rate || 0), 0);
 
-  if (isLoading) {
-    return (
-      <div className="flex flex-col h-[60vh] items-center justify-center p-12 text-center text-muted-foreground w-full">
-        <Loader2 className="h-12 w-12 animate-spin mb-4 text-primary" />
-        <h2 className="text-xl font-semibold mb-2 text-foreground">Loading Dashboard Data...</h2>
-      </div>
-    );
-  }
+    const packed     = fBatches.filter(b => b.status === "Packed");
+    const packedKg   = packed.reduce((a, b) => a + (b.pkgItems?.bone || 0) + (b.pkgItems?.boneless || 0) + (b.pkgItems?.mixed || 0) + (b.pkgItems?.skin || 0) + (b.pkgItems?.meat || 0), 0);
+    const packedVal  = packed.reduce((a, b) =>
+      a + (b.pkgItems?.bone || 0) * PKG_PRICES.bone
+        + (b.pkgItems?.boneless || 0) * PKG_PRICES.boneless
+        + (b.pkgItems?.mixed || 0) * PKG_PRICES.mixed
+        + (b.pkgItems?.skin || 0) * PKG_PRICES.skin
+        + (b.pkgItems?.meat || 0) * PKG_PRICES.meat, 0);
+
+    // Per-batch line chart: before vs after slaughter — includes cost & afterValue for the table
+    const lineData = fBatches.map(b => {
+      const bWeight = b.animalWeight || 0;
+      const bCost   = b.cost || 0;
+      const aWeight = numWeight(b.totalWeight);
+      const aRate   = b.rate || 0;
+      const aValue  = aWeight * aRate;
+
+      return {
+        name:       b.batchNo,
+        before:     bWeight,
+        beforeCost: bCost,
+        after:      aWeight,
+        afterValue: aValue,
+        // Helper derived fields for easier tooltip/chart access if needed
+        yield:      bWeight > 0 ? (aWeight / bWeight) * 100 : 0
+      };
+    }).filter(d => d.before > 0 || d.after > 0);
+
+    // Per-batch packed bar chart
+    const barData = fBatches.filter(b => b.status === "Packed").map(b => ({
+      name:   b.batchNo,
+      weight: (b.pkgItems?.bone || 0) + (b.pkgItems?.boneless || 0) + (b.pkgItems?.mixed || 0) + (b.pkgItems?.skin || 0) + (b.pkgItems?.meat || 0),
+      value:  (b.pkgItems?.bone || 0) * PKG_PRICES.bone
+             + (b.pkgItems?.boneless || 0) * PKG_PRICES.boneless
+             + (b.pkgItems?.mixed || 0) * PKG_PRICES.mixed
+             + (b.pkgItems?.skin || 0) * PKG_PRICES.skin
+             + (b.pkgItems?.meat || 0) * PKG_PRICES.meat,
+    }));
+
+    return { beforeKg, beforeValue, afterKg, afterValue, packedKg, packedVal, lineData, barData };
+  }, [fBatches]);
+
+  // ── SECTION 3 — Supply ────────────────────────────────────────────────────
+  const supplyData = useMemo(() => {
+    const shopSups  = fSupplies.filter(s => !!s.shopId);
+    const otherSups = fSupplies.filter(s => !s.shopId && s.externalRecipient?.name);
+
+    const shopValue  = shopSups.reduce((a, s)  => a + (s.totalAmount || 0), 0);
+    const otherValue = otherSups.reduce((a, s) => a + (s.totalAmount || 0), 0);
+    const shopKg     = shopSups.reduce((a, s)  => a + (s.total       || 0), 0);
+    const otherKg    = otherSups.reduce((a, s) => a + (s.total       || 0), 0);
+    const totalInvSales = shopValue + otherValue;
+    const diffPct    = otherValue > 0 ? Math.round((shopValue / otherValue - 1) * 100) : 100;
+
+    // Per-batch line chart
+    const batchMap: Record<string, { name: string; shopKg: number; otherKg: number }> = {};
+    batches.forEach(b => { batchMap[b.batchNo] = { name: b.batchNo, shopKg: 0, otherKg: 0 }; });
+    fSupplies.forEach(s => {
+      if (!batchMap[s.batch]) batchMap[s.batch] = { name: s.batch, shopKg: 0, otherKg: 0 };
+      if (s.shopId) batchMap[s.batch].shopKg     += (s.total || 0);
+      else          batchMap[s.batch].otherKg    += (s.total || 0);
+    });
+    const lineData = Object.values(batchMap).filter(d => d.shopKg > 0 || d.otherKg > 0);
+
+    return { shopValue, otherValue, shopKg, otherKg, totalInvSales, diffPct, lineData };
+  }, [fSupplies, batches]);
+
+  // ── SECTION 4 — Shop Sales per batch ─────────────────────────────────────
+  const shopSalesData = useMemo(() => {
+    // BatchNo → shopIds that received it this period
+    const batchShops: Record<string, Set<string>> = {};
+    fInvIn.forEach(i => {
+      if (!batchShops[i.batch]) batchShops[i.batch] = new Set();
+      batchShops[i.batch].add(i.shopId);
+    });
+
+    const batchMap: Record<string, {
+      name: string; inventoryIn: number; salesValue: number;
+      discount: number; opCost: number; shopProfit: number;
+    }> = {};
+
+    batches.forEach(b => {
+      batchMap[b.batchNo] = { name: b.batchNo, inventoryIn: 0, salesValue: 0, discount: 0, opCost: 0, shopProfit: 0 };
+    });
+    fInvIn.forEach(i => {
+      if (!batchMap[i.batch]) batchMap[i.batch] = { name: i.batch, inventoryIn: 0, salesValue: 0, discount: 0, opCost: 0, shopProfit: 0 };
+      batchMap[i.batch].inventoryIn += (i.totalAmount || 0);
+    });
+    Object.keys(batchShops).forEach(batchNo => {
+      const ids = batchShops[batchNo];
+      const bs  = fSales.filter(s => ids.has(s.shopId));
+      const bc  = fCosts.filter(c => ids.has(c.shopId));
+      if (!batchMap[batchNo]) batchMap[batchNo] = { name: batchNo, inventoryIn: 0, salesValue: 0, discount: 0, opCost: 0, shopProfit: 0 };
+      batchMap[batchNo].salesValue = bs.reduce((a, s) => a + (s.total         || 0), 0);
+      batchMap[batchNo].discount   = bs.reduce((a, s) => a + (s.discountGiven || 0), 0);
+      batchMap[batchNo].opCost     = bc.reduce((a, c) => a + (c.total         || 0), 0);
+      batchMap[batchNo].shopProfit =
+        batchMap[batchNo].salesValue - batchMap[batchNo].inventoryIn -
+        batchMap[batchNo].opCost - batchMap[batchNo].discount;
+    });
+    return Object.values(batchMap).filter(b => b.inventoryIn > 0 || b.salesValue > 0);
+  }, [batches, fInvIn, fSales, fCosts]);
+
+  // ── Notes grouped ─────────────────────────────────────────────────────────
+  const notesList = useMemo(() => notes.map(n => ({
+    shopName: typeof n.shopId === "object" ? n.shopId.name : "Shop",
+    text: n.text,
+    date: n.date,
+  })), [notes]);
+
+  // ── Load / error ─────────────────────────────────────────────────────────
+  if (loading) return (
+    <div className="flex flex-col h-[60vh] items-center justify-center text-muted-foreground">
+      <Loader2 className="h-10 w-10 animate-spin mb-3 text-primary" />
+      <p className="text-sm font-semibold">Loading dashboard…</p>
+    </div>
+  );
+
+  if (error) return (
+    <div className="flex flex-col h-[60vh] items-center justify-center text-center p-8">
+      <AlertTriangle className="h-10 w-10 mb-3 text-destructive" />
+      <h2 className="text-lg font-bold mb-2">Failed to load dashboard</h2>
+      <p className="text-sm text-muted-foreground mb-4">{error}</p>
+      <Button onClick={() => window.location.reload()} className="bg-primary text-white rounded-sm">Retry</Button>
+    </div>
+  );
+
+  const { rawCost, combinedExp, selling, netProfit, waterfall } = pipeline;
+  const { beforeKg, beforeValue, afterKg, afterValue, packedKg, packedVal } = dressing;
+  const { shopValue, otherValue, shopKg, otherKg, totalInvSales, diffPct } = supplyData;
 
   return (
-    <div className="animate-fade-in pb-12 w-full">
-      <div className="flex flex-col gap-4 mb-2">
-        <Breadcrumb items={[{ label: "Global Control Center Dashboard" }]} />
-      </div>
+    <div className="animate-fade-in pb-16 w-full space-y-5">
 
-      {groupedNotes.length > 0 && (
-         <div className="mb-6 w-full animate-in fade-in zoom-in-95 duration-300">
-            <h2 className="text-sm font-black text-muted-foreground uppercase tracking-widest mb-3">Shop Notes</h2>
-            <Card className="bg-muted/30 shadow-none border rounded-sm">
-               <CardContent className="p-5">
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                   {groupedNotes.map(group => (
-                      <div key={group.shop._id || group.shop.id || Math.random()}>
-                         <h3 className="text-primary font-bold mb-2">{group.shop.name}</h3>
-                         <ul className="space-y-2">
-                            {group.notes.map((note: any, idx: number) => (
-                               <li key={note._id || note.id || idx} className="flex justify-between items-start gap-4 text-sm text-foreground">
-                                  <span className="flex-1">• {note.text}</span>
-                                  <span className="text-[10px] font-bold text-muted-foreground shrink-0 pt-1">{note.date}</span>
-                               </li>
-                            ))}
-                         </ul>
-                      </div>
-                   ))}
-                  </div>
-               </CardContent>
-            </Card>
-         </div>
+      {/* ── SHOP NOTES TICKER ── */}
+      {notesList.length > 0 && (
+        <div className="w-full bg-card border border-border rounded-sm px-4 py-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+          <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground shrink-0">Shop Notes</span>
+          {notesList.map((n, i) => (
+            <span key={i} className="flex items-center gap-1.5">
+              {i > 0 && <span className="text-border">|</span>}
+              <span className="font-black text-xs" style={{ color: C_PRIMARY }}>{n.shopName} →</span>
+              <span className="text-foreground text-xs">{n.text}</span>
+            </span>
+          ))}
+        </div>
       )}
 
-      <div className="flex flex-col gap-4 mb-8">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-black text-foreground tracking-tight">Financial Control Center</h1>
-            <p className="text-sm text-muted-foreground mt-1 font-medium">Global operations and financial overview.</p>
-          </div>
-          <div className="flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-sm font-bold">
-            <span className="hidden sm:inline">Welcome,</span> Pinaka
-          </div>
+      {/* ── DATE FILTER BAR ── */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest mr-1">Date Filter:</span>
+        <div className="p-1 flex items-center gap-1 rounded-sm border bg-card" style={{ borderColor: "var(--border)" }}>
+          {(["Today", "This Week", "This Month", "Custom"] as const).map(t => (
+            <button
+              key={t}
+              onClick={() => setTimeframe(t)}
+              className={cn(
+                "px-4 py-1.5 rounded-sm text-sm font-bold transition-all whitespace-nowrap",
+                timeframe === t ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground hover:bg-primary/10"
+              )}
+            >{t}</button>
+          ))}
         </div>
-      </div>
-
-      <div className="flex flex-col mb-8 gap-6">
-        <div className="flex flex-col xl:flex-row items-stretch xl:items-center gap-3 w-full">
-          <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-2 w-full lg:w-auto">
-            <div className="p-1.5 rounded-sm flex flex-wrap items-center shadow-none border gap-1" style={{backgroundColor: 'var(--navbar-bg)', borderColor: 'var(--border)'}}>
-              {["Today", "This Week", "This Month", "Custom"].map((t) => (
-                <button 
-                  key={t}
-                  onClick={() => setTimeframe(t as any)} 
-                  className={cn(
-                    "whitespace-nowrap flex-1 lg:flex-none px-4 lg:px-6 min-h-[44px] rounded-sm text-sm font-bold transition-all", 
-                    timeframe === t ? "bg-primary text-primary-foreground shadow-none scale-100" : "text-muted-foreground hover:text-foreground hover:bg-primary/10"
-                  )}
-                >
-                  {t}
-                </button>
-              ))}
-            {timeframe === "Custom" && (
-              <div className="flex flex-col sm:flex-row items-center gap-2 bg-card p-2 rounded-sm border border-[var(--border)] shadow-none animate-in fade-in slide-in-from-left-4 duration-300 w-full lg:w-auto mt-2 lg:mt-0">
-                <div className="w-full sm:w-[130px]">
-                  <AdvancedDatePicker value={customStart} onChange={(val) => setCustomStart(val)} placeholder="Start Date" />
-                </div>
-                <span className="text-muted-foreground font-bold">-</span>
-                <div className="w-full sm:w-[130px]">
-                  <AdvancedDatePicker value={customEnd} onChange={(val) => setCustomEnd(val)} placeholder="End Date" />
-                </div>
-              </div>
-            )}
-            
-            {/* SECTION 6 — EXPORT FEATURE */}
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="h-11 rounded-sm font-bold bg-card border border-[var(--border)] shadow-none hover:text-primary hover:border-primary/30 transition-all px-4 flex items-center gap-2 w-full lg:w-auto mt-2 lg:mt-0" style={{color: 'var(--text-primary)'}}>
-                  <DownloadCloud className="w-4 h-4" /> Download
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>Export Analytics Report</DialogTitle>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="space-y-1.5">
-                    <Label>Format</Label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button variant={exportFormat === "CSV" ? "default" : "outline"} className={exportFormat === "CSV" ? "bg-primary hover:bg-primary/80 text-primary-foreground" : "text-foreground"} onClick={() => setExportFormat("CSV")}>CSV Data</Button>
-                      <Button variant={exportFormat === "PDF" ? "default" : "outline"} className={exportFormat === "PDF" ? "bg-primary hover:bg-primary/80 text-primary-foreground" : "text-foreground"} onClick={() => setExportFormat("PDF")}>PDF Report</Button>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5 mt-2">
-                    <Label>Date Range</Label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button variant={exportRange === "Daily" ? "default" : "outline"} className={exportRange === "Daily" ? "bg-primary hover:bg-primary/80 text-primary-foreground" : "text-foreground"} onClick={() => setExportRange("Daily")}>Today</Button>
-                      <Button variant={exportRange === "Weekly" ? "default" : "outline"} className={exportRange === "Weekly" ? "bg-primary hover:bg-primary/80 text-primary-foreground" : "text-foreground"} onClick={() => setExportRange("Weekly")}>This Week</Button>
-                      <Button variant={exportRange === "Monthly" ? "default" : "outline"} className={exportRange === "Monthly" ? "bg-primary hover:bg-primary/80 text-primary-foreground" : "text-foreground"} onClick={() => setExportRange("Monthly")}>This Month</Button>
-                      <Button variant={exportRange === "Custom" ? "default" : "outline"} className={exportRange === "Custom" ? "bg-primary hover:bg-primary/80 text-primary-foreground" : "text-foreground"} onClick={() => setExportRange("Custom")}>Custom Range</Button>
-                    </div>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button onClick={handleExportAnalytics} className="bg-primary hover:bg-primary/80 text-primary-foreground">Export Data</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+        {timeframe === "Custom" && (
+          <div className="flex items-center gap-2 bg-card border rounded-sm px-3 py-1">
+            <AdvancedDatePicker value={customStart} onChange={setCustomStart} placeholder="Start" />
+            <span className="text-muted-foreground font-bold">–</span>
+            <AdvancedDatePicker value={customEnd}   onChange={setCustomEnd}   placeholder="End" />
           </div>
+        )}
+      </div>
+
+      {/* ════════════════════════════════════════════════════════════════════════
+          SECTION 1 — COST TO REVENUE PIPELINE
+      ════════════════════════════════════════════════════════════════════════ */}
+      <Section
+        title="Cost to Revenue Pipeline"
+        subtitle="Per-batch average breakdown: Raw → Processing → Packaging → Supply → Operational → Discount → Selling Price → Profit"
+      >
+        {/* 4 KPI mini-cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+          <KpiCard label="Total Raw Cost"                   value={rupee(rawCost)}     color={C_RED} />
+          <KpiCard label="Discount + Operational Costs + Supply" value={rupee(combinedExp)} />
+          <KpiCard label="Total Sales Revenue"              value={rupee(selling)}     color={C_BLUE} />
+          <KpiCard
+            label="Net Profit / Loss"
+            value={`${netProfit < 0 ? "−" : "+"}${rupee(netProfit)}`}
+            color={netProfit >= 0 ? C_GREEN : C_RED}
+          />
         </div>
-      </div>
-    </div>
 
-      {/* SECTION 1 — NET RESULT (DOMINANT CARD) */}
-      <Card className={cn(
-        "rounded-sm border shadow-none relative overflow-hidden flex flex-col items-center justify-center p-12 transition-colors bg-card", 
-        netResult >= 0 ? "border-l-4 border-l-success" : "border-l-4 border-l-destructive"
-      )}>
-         <p className={cn("text-lg font-bold tracking-[0.3em] mb-4 uppercase", netResult >= 0 ? "text-success/80" : "text-destructive/80")}>Net Result</p>
-         <h2 className={cn("text-7xl font-black tracking-tighter mb-8", netResult >= 0 ? "text-success" : "text-destructive")}>
-           {netResult < 0 ? "-" : ""}₹{Math.abs(netResult).toLocaleString("en-IN")}
-         </h2>
-         <div className="flex items-center gap-3">
-            <span className={cn("text-sm font-black px-4 py-2 rounded-sm uppercase tracking-widest shadow-none", netResult >= 0 ? "bg-success text-success-foreground" : "bg-destructive text-destructive-foreground")}>
-              {netResult >= 0 ? "PROFIT" : "LOSS"}
-            </span>
-         </div>
-         
-         <div className="absolute right-[-48px] bottom-[-48px] opacity-[0.06] pointer-events-none">
-           <Activity className={cn("w-96 h-96", netResult >= 0 ? "text-success" : "text-destructive")} />
-         </div>
+        {/* Legend */}
+        <div className="flex items-center gap-4 mb-3 text-xs font-bold">
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: C_RED }} /> Costs</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: C_BLUE }} /> Revenue</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: C_GREEN }} /> Profit</span>
+        </div>
 
-         {/* Sub-breakdown inside card */}
-         <div className="mt-12 w-full max-w-3xl grid grid-cols-1 md:grid-cols-3 gap-6 bg-background/30 backdrop-blur-sm p-6 rounded-sm border border-border/30">
-            <div className="flex flex-col items-center justify-center border-r border-border/30 last:border-0 px-4">
-              <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Total Sales</span>
-              <span className="text-xl font-bold text-foreground">₹{totalSales.toLocaleString("en-IN")}</span>
-            </div>
-            <div className="flex flex-col items-center justify-center border-r border-border/30 last:border-0 px-4">
-              <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Discount</span>
-              <span className="text-xl font-bold text-foreground">₹{totalDiscount.toLocaleString("en-IN")}</span>
-            </div>
-            <div className="flex flex-col items-center justify-center px-4">
-              <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Operational Cost</span>
-              <span className="text-xl font-bold text-foreground">₹{operationalCost.toLocaleString("en-IN")}</span>
-            </div>
-         </div>
-      </Card>
+        {/* Waterfall bar chart */}
+        <div style={{ height: 300 }}>
+          {waterfall.every(d => d.value === 0)
+            ? <EmptyChart />
+            : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={waterfall} margin={{ top: 28, right: 16, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "var(--chart-text)" }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--chart-text)" }} tickFormatter={v => `₹${(v / 1000).toFixed(0)}K`} />
+                  <RechartsTooltip content={<WfTooltip />} cursor={{ fill: "var(--chart-bg)" }} />
+                  <Bar dataKey="value" maxBarSize={70} radius={[2, 2, 0, 0]}>
+                    <LabelList dataKey="value" position="top" fontSize={10} fill="var(--chart-text)"
+                      formatter={(v: number) => v > 0 ? `₹${Math.round(v).toLocaleString("en-IN")}` : v < 0 ? `−₹${Math.round(Math.abs(v)).toLocaleString("en-IN")}` : ""}
+                    />
+                    {waterfall.map((d, i) => (
+                      <Cell key={i} fill={d.type === "revenue" ? C_BLUE : d.type === "profit" ? C_GREEN : d.type === "loss" ? C_RED : C_RED} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )
+          }
+        </div>
+      </Section>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        
-        {/* SECTION 2 — EXPENSES */}
-        <Card className="rounded-sm border shadow-none bg-card hover:bg-card-hover transition-all">
-           <CardContent className="p-8">
-             <div className="flex justify-between items-center bg-destructive/5 rounded-sm border border-destructive/10 p-3 mb-6">
-                <span className="text-sm font-black text-destructive tracking-widest uppercase flex items-center gap-2"><ArrowDownRight className="w-4 h-4" /> Total Expenses</span>
-                <span className="text-3xl font-black text-destructive">₹{totalExpenses.toLocaleString("en-IN")}</span>
-             </div>
-             <div className="flex flex-col gap-4">
-                <div className="flex justify-between items-center border-b pb-3">
-                  <span className="text-sm font-semibold text-muted-foreground uppercase">Discount Given</span>
-                  <span className="text-lg font-bold text-foreground">₹{totalDiscount.toLocaleString("en-IN")}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-semibold text-muted-foreground uppercase">Operational Cost</span>
-                  <span className="text-lg font-bold text-foreground">₹{operationalCost.toLocaleString("en-IN")}</span>
-                </div>
-             </div>
-           </CardContent>
-        </Card>
+      {/* ════════════════════════════════════════════════════════════════════════
+          SECTION 2 — DRESSING
+      ════════════════════════════════════════════════════════════════════════ */}
+      <Section title="Dressing" subtitle="Before Slaughter → After Slaughter → Packed">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+          <KpiCard label="Before Slaughter Weight" value={`${beforeKg.toLocaleString("en-IN")} kg`} sub={`Value: ${rupee(beforeValue)}`} />
+          <KpiCard label="After Slaughter Weight"  value={`${afterKg.toLocaleString("en-IN")} kg`}  color={C_PRIMARY} sub={`Value: ${rupee(afterValue)}`} />
+          <KpiCard label="Packed Weight"            value={`${packedKg.toLocaleString("en-IN")} kg`} />
+          <KpiCard label="Packed Value"             value={rupee(packedVal)} color={C_BLUE} />
+        </div>
 
-        {/* SECTION 4 — INVENTORY SALES */}
-        <Card className="rounded-sm border shadow-none bg-card hover:bg-card-hover transition-all">
-           <CardContent className="p-8">
-             <div className="flex justify-between items-center bg-info/5 rounded-sm border border-info/10 p-3 mb-6">
-                <span className="text-sm font-black text-info tracking-widest uppercase flex items-center gap-2"><DollarSign className="w-4 h-4" /> Inventory Sales</span>
-                <span className="text-3xl font-black text-info">₹{totalInventorySales.toLocaleString("en-IN")}</span>
-             </div>
-             <div className="flex flex-col gap-4">
-                <div className="flex justify-between items-center border-b pb-3">
-                  <span className="text-sm font-semibold text-muted-foreground uppercase">Shop Sales (Net after discount)</span>
-                  <span className="text-lg font-bold text-foreground">₹{shopNet.toLocaleString("en-IN")}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-semibold text-muted-foreground uppercase">Others Sales</span>
-                  <span className="text-lg font-bold text-foreground">₹{othersSales.toLocaleString("en-IN")}</span>
-                </div>
-             </div>
-           </CardContent>
-        </Card>
-
-      </div>
-
-
-      {/* SECTION 5 — ANALYTICS */}
-      <div className="w-full pt-4">
-         <h2 className="text-sm font-black text-muted-foreground uppercase tracking-widest mb-4">Analytics Visualization</h2>
-         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            <Card className="rounded-sm bg-card border border-border shadow-none">
-              <CardHeader className="pb-0">
-                <CardTitle className="text-xs uppercase font-bold tracking-widest text-muted-foreground">Net Result Trend</CardTitle>
-                <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">{timeframe === "Custom" ? "Custom Range" : timeframe}</p>
-              </CardHeader>
-              <CardContent className="pt-4 h-[280px] w-full">
-                {trendData.some((d: any) => d.Profit_Loss !== 0) ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* Chart 1: Before vs After Weight (kg) */}
+          <div className="bg-background/50 p-4 rounded-sm border border-border/50">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#FF6B00] mb-4 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[#FF6B00]" /> Slaughter weight (kg)
+            </p>
+            <div style={{ height: 250 }}>
+              {dressing.lineData.length === 0
+                ? <EmptyChart />
+                : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={trendData} margin={{ top: 20, right: 20, left: 10, bottom: 5 }}>
+                    <LineChart data={dressing.lineData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--chart-text)' }} />
-                      <RechartsTooltip formatter={(value: number) => [`₹${value.toLocaleString('en-IN')}`, 'Net Result']} />
-                      <Line type="monotone" dataKey="Profit_Loss" stroke={netResult >= 0 ? "var(--chart-3)" : "var(--chart-5)"} strokeWidth={3} dot={{ r: 4 }}>
-                         <LabelList dataKey="Profit_Loss" position="top" formatter={(value: number) => `₹${value.toLocaleString('en-IN')}`} fontSize={10} fill="var(--chart-text)" />
-                      </Line>
-                      <Legend verticalAlign="top" content={() => (
-                        <div className="flex justify-center gap-4 text-[10px] font-bold pb-2 uppercase tracking-wider">
-                           <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-success"></div>Profit</span>
-                           <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-destructive"></div>Loss</span>
-                        </div>
-                      )} />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: "var(--chart-text)" }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: "var(--chart-text)" }} />
+                      <RechartsTooltip content={<DressingTooltip />} />
+                      <Line type="monotone" dataKey="before" name="Before" stroke={C_ORANGE} strokeWidth={2.5} dot={{ r: 4, strokeWidth: 2, fill: "#fff" }} activeDot={{ r: 6 }} />
+                      <Line type="monotone" dataKey="after"  name="After"  stroke={C_BLUE}   strokeWidth={2.5} dot={{ r: 4, strokeWidth: 2, fill: "#fff" }} activeDot={{ r: 6 }} />
                     </LineChart>
                   </ResponsiveContainer>
-                ) : (
-                  <div className="flex flex-col items-center justify-center p-8 bg-muted/20 border-dashed border-2 rounded-sm h-full">
-                    <AlertCircle className="w-8 h-8 text-muted-foreground/30 mb-2" />
-                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest text-center">No financial data yet</span>
-                  </div>
-                )}
-              </CardContent>
-              <div className="px-6 py-3 border-t bg-muted rounded-b-xl text-center mt-2">
-                <p className="text-xs font-semibold text-muted-foreground">
-                  {netResult === 0 ? "No result data to display." : (netResult > 0 ? `Trending positive with ₹${netResult.toLocaleString('en-IN')} profit.` : `Warning: Net loss of ₹${Math.abs(netResult).toLocaleString('en-IN')}.`)}
-                </p>
-              </div>
-            </Card>
+                )
+              }
+            </div>
+            <div className="flex justify-center gap-4 mt-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+               <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: C_ORANGE }} /> Before</span>
+               <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: C_BLUE }} /> After</span>
+            </div>
+          </div>
 
-            <Card className="rounded-sm bg-card border border-border shadow-none">
-              <CardHeader className="pb-0">
-                <CardTitle className="text-xs uppercase font-bold tracking-widest text-muted-foreground">Sales vs Expenses</CardTitle>
-                <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">{timeframe === "Custom" ? "Custom Range" : timeframe}</p>
-              </CardHeader>
-              <CardContent className="pt-4 h-[280px] w-full">
-                {breakdownData.some((d: any) => d.Value !== 0) ? (
+          {/* Chart 2: Packed Weight & Value per batch */}
+          <div className="bg-background/50 p-4 rounded-sm border border-border/50">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#9333EA] mb-4 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[#9333EA]" /> Packed Weight &amp; Value
+            </p>
+            <div style={{ height: 250 }}>
+              {dressing.barData.length === 0
+                ? <EmptyChart />
+                : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={breakdownData} margin={{ top: 20, right: 10, left: 10, bottom: 5 }}>
+                    <BarChart data={dressing.barData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--chart-text)' }} />
-                      <RechartsTooltip cursor={{fill: 'transparent'}} formatter={(value: number) => [`₹${value.toLocaleString('en-IN')}`, 'Amount']} />
-                      <Bar dataKey="Value" radius={[4, 4, 0, 0]} maxBarSize={50}>
-                        {breakdownData.map((entry: any, index: number) => (
-                          <Cell key={`cell-${index}`} fill={entry.name === 'Sales' ? 'var(--primary)' : 'var(--chart-5)'} />
-                        ))}
-                        <LabelList dataKey="Value" position="top" formatter={(value: number) => value > 0 ? `₹${value.toLocaleString()}` : ''} fontSize={10} fill="var(--chart-text)" />
-                      </Bar>
-                      <Legend verticalAlign="top" content={() => (
-                        <div className="flex justify-center gap-4 text-[10px] font-bold pb-2 uppercase tracking-wider">
-                           <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-info"></div>Sales</span>
-                           <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-destructive"></div>Expenses</span>
-                        </div>
-                      )} />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: "var(--chart-text)" }} />
+                      <YAxis yAxisId="l" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: "var(--chart-text)" }} />
+                      <YAxis yAxisId="r" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: "var(--chart-text)" }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
+                      <RechartsTooltip content={<GenTooltip />} />
+                      <Bar yAxisId="l" dataKey="weight" name="Packed kg" fill={C_GREEN} maxBarSize={20} radius={[2, 2, 0, 0]} />
+                      <Bar yAxisId="r" dataKey="value"  name="Packed ₹" fill={C_BLUE}  maxBarSize={20} radius={[2, 2, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
-                ) : (
-                  <div className="flex flex-col items-center justify-center p-8 bg-muted/20 border-dashed border-2 rounded-sm h-full">
-                    <AlertCircle className="w-8 h-8 text-muted-foreground/30 mb-2" />
-                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest text-center">No expenses or sales recorded</span>
-                  </div>
-                )}
-              </CardContent>
-              <div className="px-6 py-3 border-t bg-muted rounded-b-xl text-center mt-2">
-                <p className="text-xs font-semibold text-muted-foreground">
-                  {totalSales === 0 && totalExpenses === 0 ? "No records found." : (totalExpenses === 0 ? "No expenses recorded this period." : `Expenses are ${Math.round((totalExpenses / (totalSales || 1)) * 100)}% of sales limit.`)}
-                </p>
-              </div>
-            </Card>
+                )
+              }
+            </div>
+            <div className="flex justify-center gap-4 mt-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+               <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm" style={{ background: C_GREEN }} /> Weight (kg)</span>
+               <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm" style={{ background: C_BLUE }} /> Value (₹)</span>
+            </div>
+          </div>
+        </div>
 
-            <Card className="rounded-sm bg-card border border-border shadow-none">
-              <CardHeader className="pb-0">
-                <CardTitle className="text-xs uppercase font-bold tracking-widest text-muted-foreground">Inventory Flow</CardTitle>
-                <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">{timeframe === "Custom" ? "Custom Range" : timeframe}</p>
-              </CardHeader>
-              <CardContent className="pt-4 h-[280px] w-full">
-                {inventoryFlow.some((d: any) => d.Value !== 0) ? (
+      </Section>
+
+      {/* ════════════════════════════════════════════════════════════════════════
+          SECTION 3 — SUPPLY
+      ════════════════════════════════════════════════════════════════════════ */}
+      <Section title="Supply" subtitle="Shop Supply vs Other Supply">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+          {/* Left: KPI column */}
+          <div className="flex flex-col gap-3">
+            <div className="rounded-sm border border-border p-4 bg-background">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Total Inventory Sales</p>
+              <p className="text-2xl font-black text-foreground">{rupee(totalInvSales)}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Shop + Others</p>
+            </div>
+            <div className="rounded-sm border border-border p-4" style={{ backgroundColor: "#F0FDF4" }}>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Shop Supply</p>
+              <p className="text-2xl font-black" style={{ color: C_GREEN }}>{rupee(shopValue)}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{shopKg.toLocaleString("en-IN")} kg</p>
+            </div>
+            <div className="rounded-sm border border-border p-4" style={{ backgroundColor: "#FFFBEB" }}>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Other Supply</p>
+              <p className="text-2xl font-black" style={{ color: C_ORANGE }}>{rupee(otherValue)}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{otherKg.toLocaleString("en-IN")} kg</p>
+            </div>
+            {shopValue > 0 && otherValue > 0 && (
+              <div className="rounded-sm border border-border p-3 bg-primary/5 text-xs font-bold text-primary">
+                {shopValue >= otherValue
+                  ? `Shop supply higher by ${diffPct}%`
+                  : `Other supply higher by ${Math.round((otherValue / shopValue - 1) * 100)}%`
+                }
+              </div>
+            )}
+          </div>
+
+          {/* Right: Line chart shop vs other supply per batch */}
+          <div className="lg:col-span-2">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Shop vs Other Supply (kg)</p>
+            <div style={{ height: 280 }}>
+              {supplyData.lineData.length === 0
+                ? <EmptyChart />
+                : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={inventoryFlow} margin={{ top: 20, right: 10, left: 10, bottom: 5 }}>
+                    <LineChart data={supplyData.lineData} margin={{ top: 10, right: 16, left: 0, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--chart-text)' }} />
-                      <RechartsTooltip cursor={{fill: 'transparent'}} formatter={(value: number) => [Math.round(value), 'Units']} />
-                      <Bar dataKey="Value" radius={[4, 4, 0, 0]} maxBarSize={50}>
-                        {inventoryFlow.map((entry: any, index: number) => (
-                           <Cell key={`cell-${index}`} fill={entry.name === 'Stock In' ? 'var(--chart-3)' : 'var(--chart-6)'} />
-                        ))}
-                        <LabelList dataKey="Value" position="top" formatter={(value: number) => value > 0 ? Math.round(value) : ''} fontSize={10} fill="var(--chart-text)" />
-                      </Bar>
-                      <Legend verticalAlign="top" content={() => (
-                        <div className="flex justify-center gap-4 text-[10px] font-bold pb-2 uppercase tracking-wider">
-                           <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-success"></div>Stock In</span>
-                           <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-amber-500"></div>Stock Out</span>
-                        </div>
-                      )} />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--chart-text)" }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--chart-text)" }} />
+                      <RechartsTooltip content={<GenTooltip />} />
+                      <Legend wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />
+                      <Line type="monotone" dataKey="shopKg"  name="Shop Supply (kg)"  stroke={C_GREEN}  strokeWidth={2} dot={{ r: 3, fill: C_GREEN }} />
+                      <Line type="monotone" dataKey="otherKg" name="Other Supply (kg)" stroke={C_BLUE}   strokeWidth={2} dot={{ r: 3, fill: C_BLUE }}  />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )
+              }
+            </div>
+          </div>
+        </div>
+      </Section>
+
+      {/* ════════════════════════════════════════════════════════════════════════
+          SECTION 4 — SHOP SALES
+      ════════════════════════════════════════════════════════════════════════ */}
+      <Section title="Shop Sales" subtitle="Inventory In → Sales → Discount → Operational Cost → Profit/Loss">
+        {shopSalesData.length === 0
+          ? (
+            <div className="h-48 flex items-center justify-center">
+              <EmptyChart msg="No sales data for this period" />
+            </div>
+          )
+          : (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+
+              {/* Left: Stacked bar chart */}
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Sales Breakdown per Batch</p>
+                <div style={{ height: 300 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={shopSalesData} margin={{ top: 10, right: 16, left: 0, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--chart-text)" }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--chart-text)" }} tickFormatter={v => `₹${(v / 1000).toFixed(0)}K`} />
+                      <RechartsTooltip content={<GenTooltip />} />
+                      <Legend wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />
+                      <Bar dataKey="inventoryIn" name="Inventory In (₹)" stackId="a" fill={C_BLUE}   maxBarSize={40} />
+                      <Bar dataKey="salesValue"  name="Sales (₹)"        stackId="a" fill={C_GREEN}  maxBarSize={40} />
+                      <Bar dataKey="discount"    name="Discount (₹)"     stackId="a" fill={C_RED}    maxBarSize={40} />
+                      <Bar dataKey="opCost"      name="Operational (₹)"  stackId="a" fill={C_ORANGE} maxBarSize={40} radius={[2, 2, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
-                ) : (
-                  <div className="flex flex-col items-center justify-center p-8 bg-muted/20 border-dashed border-2 rounded-sm h-full">
-                    <AlertCircle className="w-8 h-8 text-muted-foreground/30 mb-2" />
-                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest text-center">No inventory movement yet</span>
-                  </div>
-                )}
-              </CardContent>
-              <div className="px-6 py-3 border-t bg-muted rounded-b-xl text-center mt-2">
-                <p className="text-xs font-semibold text-muted-foreground">
-                   {inventoryFlow[0].Value === 0 && inventoryFlow[1].Value === 0 ? "No stock moved recently." : `Stock In outpaces Stock Out by ${Math.round(inventoryFlow[0].Value - inventoryFlow[1].Value)} units.`}
-                </p>
+                </div>
               </div>
-            </Card>
 
-         </div>
+              {/* Right: Profit / Loss bar + trend line */}
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Profit / Loss per Batch</p>
+                <div style={{ height: 300 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={shopSalesData} margin={{ top: 10, right: 16, left: 0, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--chart-text)" }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--chart-text)" }} tickFormatter={v => `₹${(v / 1000).toFixed(0)}K`} />
+                      <RechartsTooltip content={<GenTooltip />} />
+                      <Legend wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />
+                      <ReferenceLine y={0} stroke="var(--border)" strokeWidth={2} />
+                      <Bar dataKey="shopProfit" name="Profit/Loss (₹)" maxBarSize={40} radius={[2, 2, 0, 0]}>
+                        {shopSalesData.map((d, i) => (
+                          <Cell key={i} fill={d.shopProfit >= 0 ? C_GREEN : C_RED} />
+                        ))}
+                      </Bar>
+                      <Line type="monotone" dataKey="shopProfit" name="Trend" stroke={C_ORANGE} strokeWidth={2} dot={{ r: 3, fill: C_ORANGE }} activeDot={{ r: 5 }} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+            </div>
+          )
+        }
+      </Section>
+
+      {/* ── Footer ── */}
+      <div className="text-center text-[10px] text-muted-foreground font-medium tracking-wider pt-2">
+        PINAKA RETAIL ERP &bull; Data refreshes on filter change &bull; All values in INR (₹)
       </div>
-      
+
     </div>
   );
 }
-
