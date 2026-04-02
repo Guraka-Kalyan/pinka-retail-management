@@ -214,7 +214,8 @@ export default function Dashboard() {
 
   // ── SECTION 2 — Dressing ──────────────────────────────────────────────────
   const dressing = useMemo(() => {
-    const beforeKg = fBatches.reduce((a, b) => a + (b.animalWeight || 0), 0);
+    const beforeKg    = fBatches.reduce((a, b) => a + (b.animalWeight || 0), 0);
+    const beforeValue = fBatches.reduce((a, b) => a + (b.cost || 0), 0);  // total purchase cost
 
     const slaughtered = fBatches.filter(b => b.status === "Slaughtered" || b.status === "Packed");
     const afterKg     = slaughtered.reduce((a, b) => a + numWeight(b.totalWeight), 0);
@@ -229,11 +230,13 @@ export default function Dashboard() {
         + (b.pkgItems?.skin || 0) * PKG_PRICES.skin
         + (b.pkgItems?.meat || 0) * PKG_PRICES.meat, 0);
 
-    // Per-batch line chart: before vs after slaughter
+    // Per-batch line chart: before vs after slaughter — includes cost & afterValue for the table
     const lineData = fBatches.map(b => ({
-      name:   b.batchNo,
-      before: b.animalWeight || 0,
-      after:  numWeight(b.totalWeight),
+      name:       b.batchNo,
+      before:     b.animalWeight || 0,
+      beforeCost: b.cost || 0,
+      after:      numWeight(b.totalWeight),
+      afterValue: numWeight(b.totalWeight) * (b.rate || 0),
     })).filter(d => d.before > 0 || d.after > 0);
 
     // Per-batch packed bar chart
@@ -247,7 +250,7 @@ export default function Dashboard() {
              + (b.pkgItems?.meat || 0) * PKG_PRICES.meat,
     }));
 
-    return { beforeKg, afterKg, afterValue, packedKg, packedVal, lineData, barData };
+    return { beforeKg, beforeValue, afterKg, afterValue, packedKg, packedVal, lineData, barData };
   }, [fBatches]);
 
   // ── SECTION 3 — Supply ────────────────────────────────────────────────────
@@ -336,7 +339,7 @@ export default function Dashboard() {
   );
 
   const { rawCost, combinedExp, selling, netProfit, waterfall } = pipeline;
-  const { beforeKg, afterKg, afterValue, packedKg, packedVal } = dressing;
+  const { beforeKg, beforeValue, afterKg, afterValue, packedKg, packedVal } = dressing;
   const { shopValue, otherValue, shopKg, otherKg, totalInvSales, diffPct } = supplyData;
 
   return (
@@ -438,7 +441,7 @@ export default function Dashboard() {
       <Section title="Dressing" subtitle="Before Slaughter → After Slaughter → Packed">
         {/* 4 KPI cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-          <KpiCard label="Before Slaughter Weight" value={`${beforeKg.toLocaleString("en-IN")} kg`} />
+          <KpiCard label="Before Slaughter Weight" value={`${beforeKg.toLocaleString("en-IN")} kg`} sub={`Value: ${rupee(beforeValue)}`} />
           <KpiCard label="After Slaughter Weight"  value={`${afterKg.toLocaleString("en-IN")} kg`}  color={C_PRIMARY} sub={`Value: ${rupee(afterValue)}`} />
           <KpiCard label="Packed Weight"            value={`${packedKg.toLocaleString("en-IN")} kg`} />
           <KpiCard label="Packed Value"             value={rupee(packedVal)} color={C_BLUE} />
@@ -466,6 +469,38 @@ export default function Dashboard() {
                 )
               }
             </div>
+
+            {/* Per-batch before / after breakdown table */}
+            {dressing.lineData.length > 0 && (
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left py-1.5 pr-4 font-bold text-muted-foreground uppercase tracking-wider">Batch</th>
+                      <th className="text-right py-1.5 pr-4 font-bold text-muted-foreground uppercase tracking-wider">Before (kg)</th>
+                      <th className="text-right py-1.5 pr-4 font-bold text-muted-foreground uppercase tracking-wider">Price</th>
+                      <th className="text-right py-1.5 pr-4 font-bold text-muted-foreground uppercase tracking-wider">After (kg)</th>
+                      <th className="text-right py-1.5 font-bold text-muted-foreground uppercase tracking-wider">Price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dressing.lineData.map((row, i) => (
+                      <tr key={i} className="border-b border-border/50 last:border-0 hover:bg-muted/30 transition-colors">
+                        <td className="py-1.5 pr-4 font-semibold text-foreground">{row.name}</td>
+                        <td className="py-1.5 pr-4 text-right text-foreground">{row.before} kg</td>
+                        <td className="py-1.5 pr-4 text-right text-muted-foreground">{rupee(row.beforeCost)}</td>
+                        <td className="py-1.5 pr-4 text-right font-semibold" style={{ color: row.after > 0 ? C_ORANGE : undefined }}>
+                          {row.after > 0 ? `${row.after} kg` : <span className="text-muted-foreground">–</span>}
+                        </td>
+                        <td className="py-1.5 text-right text-muted-foreground">
+                          {row.afterValue > 0 ? rupee(row.afterValue) : <span>–</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           {/* Right: Packed weight & value per batch */}
