@@ -52,6 +52,60 @@ const WfTooltip = ({ active, payload }: any) => {
     </div>
   );
 };
+const DressingTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  
+  const beforePricePerKg = d.before > 0 ? d.beforeCost / d.before : 0;
+  const afterPricePerKg = d.after > 0 ? d.afterValue / d.after : 0;
+  const yieldPct = d.before > 0 ? Math.round((d.after / d.before) * 100) : 0;
+
+  return (
+    <div className="bg-card border border-border rounded-sm p-3 text-xs shadow min-w-[180px]">
+      <p className="font-black text-[10px] uppercase tracking-widest text-muted-foreground mb-2 border-b border-border pb-1">Batch: {label}</p>
+      
+      <div className="space-y-3 mt-2">
+        <div className="space-y-1">
+          <p className="font-bold text-orange-500 uppercase text-[9px] tracking-wider">Before Slaughter</p>
+          <div className="flex justify-between">
+            <span>Weight:</span>
+            <span className="font-bold">{d.before} kg</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Value:</span>
+            <span className="font-bold">{rupee(d.beforeCost)}</span>
+          </div>
+          <div className="flex justify-between text-[10px] text-muted-foreground">
+            <span>Price/kg:</span>
+            <span>{rupee(beforePricePerKg)}</span>
+          </div>
+        </div>
+
+        {d.after > 0 && (
+          <div className="space-y-1 border-t border-border/50 pt-2">
+            <div className="flex justify-between items-center mb-1">
+               <p className="font-bold text-blue-600 uppercase text-[9px] tracking-wider">After Slaughter</p>
+               <span className="bg-blue-100 text-blue-700 text-[9px] px-1 font-black rounded-xs">Yield: {yieldPct}%</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Weight:</span>
+              <span className="font-bold">{d.after} kg</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Value:</span>
+              <span className="font-bold">{rupee(d.afterValue)}</span>
+            </div>
+            <div className="flex justify-between text-[10px] text-muted-foreground">
+              <span>Price/kg:</span>
+              <span>{rupee(afterPricePerKg)}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const GenTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   return (
@@ -231,13 +285,23 @@ export default function Dashboard() {
         + (b.pkgItems?.meat || 0) * PKG_PRICES.meat, 0);
 
     // Per-batch line chart: before vs after slaughter — includes cost & afterValue for the table
-    const lineData = fBatches.map(b => ({
-      name:       b.batchNo,
-      before:     b.animalWeight || 0,
-      beforeCost: b.cost || 0,
-      after:      numWeight(b.totalWeight),
-      afterValue: numWeight(b.totalWeight) * (b.rate || 0),
-    })).filter(d => d.before > 0 || d.after > 0);
+    const lineData = fBatches.map(b => {
+      const bWeight = b.animalWeight || 0;
+      const bCost   = b.cost || 0;
+      const aWeight = numWeight(b.totalWeight);
+      const aRate   = b.rate || 0;
+      const aValue  = aWeight * aRate;
+
+      return {
+        name:       b.batchNo,
+        before:     bWeight,
+        beforeCost: bCost,
+        after:      aWeight,
+        afterValue: aValue,
+        // Helper derived fields for easier tooltip/chart access if needed
+        yield:      bWeight > 0 ? (aWeight / bWeight) * 100 : 0
+      };
+    }).filter(d => d.before > 0 || d.after > 0);
 
     // Per-batch packed bar chart
     const barData = fBatches.filter(b => b.status === "Packed").map(b => ({
@@ -439,7 +503,6 @@ export default function Dashboard() {
           SECTION 2 — DRESSING
       ════════════════════════════════════════════════════════════════════════ */}
       <Section title="Dressing" subtitle="Before Slaughter → After Slaughter → Packed">
-        {/* 4 KPI cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
           <KpiCard label="Before Slaughter Weight" value={`${beforeKg.toLocaleString("en-IN")} kg`} sub={`Value: ${rupee(beforeValue)}`} />
           <KpiCard label="After Slaughter Weight"  value={`${afterKg.toLocaleString("en-IN")} kg`}  color={C_PRIMARY} sub={`Value: ${rupee(afterValue)}`} />
@@ -448,85 +511,64 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {/* Left: Before vs After line chart */}
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Before vs After Slaughter Weight (kg)</p>
-            <div style={{ height: 240 }}>
+          {/* Chart 1: Before vs After Weight (kg) */}
+          <div className="bg-background/50 p-4 rounded-sm border border-border/50">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#FF6B00] mb-4 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[#FF6B00]" /> Slaughter weight (kg)
+            </p>
+            <div style={{ height: 250 }}>
               {dressing.lineData.length === 0
                 ? <EmptyChart />
                 : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={dressing.lineData} margin={{ top: 10, right: 16, left: 0, bottom: 5 }}>
+                    <LineChart data={dressing.lineData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--chart-text)" }} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--chart-text)" }} />
-                      <RechartsTooltip content={<GenTooltip />} />
-                      <Legend wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />
-                      <Line type="monotone" dataKey="before" name="Before Slaughter" stroke={C_ORANGE} strokeWidth={2} dot={{ r: 3 }} />
-                      <Line type="monotone" dataKey="after"  name="After Slaughter"  stroke={C_BLUE}   strokeWidth={2} dot={{ r: 3 }} />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: "var(--chart-text)" }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: "var(--chart-text)" }} />
+                      <RechartsTooltip content={<DressingTooltip />} />
+                      <Line type="monotone" dataKey="before" name="Before" stroke={C_ORANGE} strokeWidth={2.5} dot={{ r: 4, strokeWidth: 2, fill: "#fff" }} activeDot={{ r: 6 }} />
+                      <Line type="monotone" dataKey="after"  name="After"  stroke={C_BLUE}   strokeWidth={2.5} dot={{ r: 4, strokeWidth: 2, fill: "#fff" }} activeDot={{ r: 6 }} />
                     </LineChart>
                   </ResponsiveContainer>
                 )
               }
             </div>
-
-            {/* Per-batch before / after breakdown table */}
-            {dressing.lineData.length > 0 && (
-              <div className="mt-3 overflow-x-auto">
-                <table className="w-full text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left py-1.5 pr-4 font-bold text-muted-foreground uppercase tracking-wider">Batch</th>
-                      <th className="text-right py-1.5 pr-4 font-bold text-muted-foreground uppercase tracking-wider">Before (kg)</th>
-                      <th className="text-right py-1.5 pr-4 font-bold text-muted-foreground uppercase tracking-wider">Price</th>
-                      <th className="text-right py-1.5 pr-4 font-bold text-muted-foreground uppercase tracking-wider">After (kg)</th>
-                      <th className="text-right py-1.5 font-bold text-muted-foreground uppercase tracking-wider">Price</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dressing.lineData.map((row, i) => (
-                      <tr key={i} className="border-b border-border/50 last:border-0 hover:bg-muted/30 transition-colors">
-                        <td className="py-1.5 pr-4 font-semibold text-foreground">{row.name}</td>
-                        <td className="py-1.5 pr-4 text-right text-foreground">{row.before} kg</td>
-                        <td className="py-1.5 pr-4 text-right text-muted-foreground">{rupee(row.beforeCost)}</td>
-                        <td className="py-1.5 pr-4 text-right font-semibold" style={{ color: row.after > 0 ? C_ORANGE : undefined }}>
-                          {row.after > 0 ? `${row.after} kg` : <span className="text-muted-foreground">–</span>}
-                        </td>
-                        <td className="py-1.5 text-right text-muted-foreground">
-                          {row.afterValue > 0 ? rupee(row.afterValue) : <span>–</span>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <div className="flex justify-center gap-4 mt-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+               <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: C_ORANGE }} /> Before</span>
+               <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: C_BLUE }} /> After</span>
+            </div>
           </div>
 
-          {/* Right: Packed weight & value per batch */}
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Packed Weight &amp; Value per Batch</p>
-            <div style={{ height: 240 }}>
+          {/* Chart 2: Packed Weight & Value per batch */}
+          <div className="bg-background/50 p-4 rounded-sm border border-border/50">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#9333EA] mb-4 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[#9333EA]" /> Packed Weight &amp; Value
+            </p>
+            <div style={{ height: 250 }}>
               {dressing.barData.length === 0
                 ? <EmptyChart />
                 : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={dressing.barData} margin={{ top: 10, right: 16, left: 0, bottom: 5 }}>
+                    <BarChart data={dressing.barData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--chart-text)" }} />
-                      <YAxis yAxisId="l" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--chart-text)" }} />
-                      <YAxis yAxisId="r" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--chart-text)" }} tickFormatter={v => `₹${(v / 1000).toFixed(0)}K`} />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: "var(--chart-text)" }} />
+                      <YAxis yAxisId="l" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: "var(--chart-text)" }} />
+                      <YAxis yAxisId="r" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: "var(--chart-text)" }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
                       <RechartsTooltip content={<GenTooltip />} />
-                      <Legend wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />
-                      <Bar yAxisId="l" dataKey="weight" name="Packed Weight (kg)" fill={C_GREEN}  maxBarSize={30} radius={[2, 2, 0, 0]} />
-                      <Bar yAxisId="r" dataKey="value"  name="Packed Value (₹)"  fill={C_BLUE}   maxBarSize={30} radius={[2, 2, 0, 0]} />
+                      <Bar yAxisId="l" dataKey="weight" name="Packed kg" fill={C_GREEN} maxBarSize={20} radius={[2, 2, 0, 0]} />
+                      <Bar yAxisId="r" dataKey="value"  name="Packed ₹" fill={C_BLUE}  maxBarSize={20} radius={[2, 2, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 )
               }
             </div>
+            <div className="flex justify-center gap-4 mt-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+               <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm" style={{ background: C_GREEN }} /> Weight (kg)</span>
+               <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm" style={{ background: C_BLUE }} /> Value (₹)</span>
+            </div>
           </div>
         </div>
+
       </Section>
 
       {/* ════════════════════════════════════════════════════════════════════════
