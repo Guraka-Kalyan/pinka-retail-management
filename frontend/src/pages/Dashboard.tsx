@@ -1,525 +1,679 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import Breadcrumb from "@/components/Breadcrumb";
-import { 
-  TrendingUp, ArrowDownRight, Activity, Calendar as CalendarIcon, DownloadCloud,
-  CheckCircle2, DollarSign, Package, AlertCircle, Loader2
+import {
+  TrendingUp, TrendingDown, Activity, AlertTriangle, Loader2,
+  Wallet, Smartphone, Store, IndianRupee, Package
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { AdvancedDatePicker } from "@/components/ui/advanced-date-picker";
-import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter
-} from "@/components/ui/dialog";
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
-  LineChart, Line, Cell, LabelList
-} from 'recharts';
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
+  Cell, ComposedChart, Line, ReferenceLine
+} from "recharts";
 import api from "@/lib/api";
 
-export default function Dashboard() {
-  const [timeframe, setTimeframe] = useState<"Today" | "This Week" | "This Month" | "Custom">("This Week");
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface ShopRecord { _id: string; name: string; }
+interface NoteRecord {
+  _id: string;
+  shopId: { _id: string; name: string } | string;
+  text: string;
+  date: string;
+}
+interface SaleRecord {
+  shopId: string; date: string; billId: string;
+  cash: number; phonePe: number; total: number; discountGiven: number;
+}
+interface CostRecord { shopId: string; date: string; total: number; }
+interface InvInRecord { shopId: string; batch: string; date: string; totalAmount: number; }
+interface SupplyRecord {
+  _id: string;
+  shopId: { _id: string; name: string } | null;
+  externalRecipient: { name: string };
+  batch: string; totalAmount: number; date: string;
+}
+interface BatchRecord {
+  _id: string; batchNo: string; animalId: string;
+  animalWeight: number; rate: number; cost: number;
+  date: string; status: string;
+}
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+const C_COST    = "#DC2626";
+const C_REVENUE = "#2563EB";
+const C_PROFIT  = "#16A34A";
+const C_PRIMARY = "#FF6B00";
+const C_OPEX    = "#9333EA";
+const C_DISC    = "#F59E0B";
+
+const fmt = (n: number) =>
+  `₹${Math.round(Math.abs(n)).toLocaleString("en-IN")}`;
+
+// ─── Custom Tooltips ──────────────────────────────────────────────────────────
+const WaterfallTooltip = ({ active, payload }: any) => {
+  if (!active || !payload?.length) return null;
+  const d = payload[0]?.payload;
+  const color = d.type === "revenue" ? C_REVENUE
+    : d.type === "profit" ? C_PROFIT
+    : d.type === "loss"   ? C_COST : C_COST;
+  return (
+    <div className="bg-card border border-border rounded-sm p-3 shadow-sm text-xs">
+      <p className="font-bold text-foreground mb-1">{d.label}</p>
+      <p className="font-semibold" style={{ color }}>
+        {d.value < 0 ? "−" : ""}{fmt(d.value)}
+      </p>
+    </div>
+  );
+};
+
+const BatchTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-card border border-border rounded-sm p-3 shadow-sm text-xs space-y-1 min-w-[140px]">
+      <p className="font-bold text-foreground mb-2">{label}</p>
+      {payload.map((p: any) => (
+        <div key={p.dataKey} className="flex justify-between gap-4">
+          <span style={{ color: p.color }}>{p.name}</span>
+          <span className="font-semibold text-foreground">{fmt(p.value)}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const PLTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  const val = payload[0]?.value ?? 0;
+  return (
+    <div className="bg-card border border-border rounded-sm p-3 shadow-sm text-xs">
+      <p className="font-bold text-foreground mb-1">{label}</p>
+      <p className="font-semibold" style={{ color: val >= 0 ? C_PROFIT : C_COST }}>
+        {val < 0 ? "−" : ""}{fmt(val)} {val >= 0 ? "Profit" : "Loss"}
+      </p>
+    </div>
+  );
+};
+
+// ─── Component ────────────────────────────────────────────────────────────────
+export default function Dashboard() {
   const todayStr = new Date().toISOString().split("T")[0];
 
-  const [exportFormat, setExportFormat] = useState<"CSV" | "PDF">("CSV");
-  const [exportRange, setExportRange] = useState<"Daily" | "Weekly" | "Monthly" | "Custom">("Daily");
+  // State
+  const [timeframe, setTimeframe] = useState<"Today" | "This Week" | "This Month" | "Custom">("This Week");
   const [customStart, setCustomStart] = useState(todayStr);
   const [customEnd, setCustomEnd] = useState(todayStr);
-
   const [isLoading, setIsLoading] = useState(true);
-  const [shopsList, setShopsList] = useState<any[]>([]);
-  const [notes, setNotes] = useState<any[]>([]);
-  const [allSales, setAllSales] = useState<any[]>([]);
-  const [allCosts, setAllCosts] = useState<any[]>([]);
-  const [allSupplies, setAllSupplies] = useState<any[]>([]);
-  const [allBatches, setAllBatches] = useState<any[]>([]);
-  const [mainInventory, setMainInventory] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
+  // Raw data
+  const [shopsList, setShopsList]           = useState<ShopRecord[]>([]);
+  const [notes, setNotes]                   = useState<NoteRecord[]>([]);
+  const [allSales, setAllSales]             = useState<SaleRecord[]>([]);
+  const [allCosts, setAllCosts]             = useState<CostRecord[]>([]);
+  const [allInvIn, setAllInvIn]             = useState<InvInRecord[]>([]);
+  const [allSupplies, setAllSupplies]       = useState<SupplyRecord[]>([]);
+  const [allBatches, setAllBatches]         = useState<BatchRecord[]>([]);
+
+  // ── Fetch ─────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const fetchData = async () => {
+    const load = async () => {
       try {
         setIsLoading(true);
-        const [shopsRes, notesRes, centralInvRes, suppliesRes, batchesRes] = await Promise.all([
+        setError(null);
+
+        const [shopsRes, notesRes, suppliesRes, batchesRes] = await Promise.all([
           api.get("/shops"),
           api.get("/shops/notes/all"),
-          api.get("/central-inventory"),
           api.get("/supplies"),
           api.get("/batches"),
         ]);
-        
-        const shops = shopsRes.data.data || [];
+
+        const shops: ShopRecord[] = shopsRes.data.data || [];
         setShopsList(shops);
         setNotes(notesRes.data.data || []);
-        setMainInventory(centralInvRes.data.data || []);
         setAllSupplies(suppliesRes.data.data || []);
         setAllBatches(batchesRes.data.data || []);
 
-        // Fetch sales & costs for all shops
-        const salesPromises = shops.map((s: any) => api.get(`/shops/${s._id}/sales`));
-        const prepPromises = shops.map((s: any) => api.get(`/shops/${s._id}/preparations`));
-        const costsPromises = shops.map((s: any) => api.get(`/shops/${s._id}/daily-costs`));
+        // Per-shop data in parallel
+        const perShop = await Promise.all(
+          shops.map(s =>
+            Promise.all([
+              api.get(`/shops/${s._id}/sales`),
+              api.get(`/shops/${s._id}/daily-costs`),
+              api.get(`/shops/${s._id}/inventory-in`),
+            ]).then(([salesR, costsR, invR]) => ({
+              shopId: s._id,
+              sales:  salesR.data.data || [],
+              costs:  costsR.data.data || [],
+              invIn:  invR.data.data   || [],
+            }))
+          )
+        );
 
-        const salesResults = await Promise.all(salesPromises);
-        const prepResults = await Promise.all(prepPromises);
-        const costsResults = await Promise.all(costsPromises);
+        const sales:  SaleRecord[]  = perShop.flatMap(r => r.sales.map((s: any)  => ({ ...s, shopId: r.shopId })));
+        const costs:  CostRecord[]  = perShop.flatMap(r => r.costs.map((c: any)  => ({ ...c, shopId: r.shopId })));
+        const invIn:  InvInRecord[] = perShop.flatMap(r => r.invIn.map((i: any)  => ({ ...i, shopId: r.shopId })));
 
-        // Combine sales & preps as "inventory out" per previous logic
-        const combinedSales = salesResults.flatMap((res, idx) => {
-          const shopSales = res.data.data || [];
-          const shopPreps = prepResults[idx].data.data || [];
-          return [...shopSales, ...shopPreps];
-        });
-        
-        const combinedCosts = costsResults.flatMap((res) => res.data.data || []);
+        setAllSales(sales);
+        setAllCosts(costs);
+        setAllInvIn(invIn);
 
-        setAllSales(combinedSales);
-        setAllCosts(combinedCosts);
-      } catch (err) {
-        console.error("Dashboard error", err);
+        // Debug logs as required
+        console.log("[Dashboard] /api/supplies sample:", suppliesRes.data.data?.[0]);
+        console.log("[Dashboard] /api/batches sample:",  batchesRes.data.data?.[0]);
+        console.log("[Dashboard] sales sample:",  sales[0]);
+        console.log("[Dashboard] costs sample:",  costs[0]);
+        console.log("[Dashboard] invIn sample:",  invIn[0]);
+
+      } catch (err: any) {
+        console.error("[Dashboard] fetch error:", err);
+        setError(err?.response?.data?.message || "Failed to load dashboard data.");
       } finally {
         setIsLoading(false);
       }
     };
-    fetchData();
+    load();
   }, []);
 
-  const groupedNotes = useMemo(() => {
-    const groups: any[] = [];
-    shopsList.forEach((shop: any) => {
-      const shopNotes = notes.filter((n: any) => n.shopId === shop._id || (n.shopId && n.shopId._id === shop._id));
-      if (shopNotes.length > 0) {
-        groups.push({ shop, notes: shopNotes });
-      }
-    });
-    return groups;
-  }, [notes, shopsList]);
-
-  const filterByDateRange = (records: any[], dateField: string = "date") => {
+  // ── Date Range ────────────────────────────────────────────────────────────
+  const dateRange = useMemo(() => {
     const now = new Date();
-    return records.filter(r => {
-      const recDate = r[dateField];
-      if (!recDate) return false;
-      if (timeframe === "Today") return recDate === todayStr;
-      if (timeframe === "This Week") {
-        const pastWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-        return recDate >= pastWeek;
-      }
-      if (timeframe === "This Month") {
-        const pastMonth = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-        return recDate >= pastMonth;
-      }
-      if (timeframe === "Custom") return recDate >= customStart && recDate <= customEnd;
-      return false;
-    });
-  };
+    if (timeframe === "Today")      return { from: todayStr, to: todayStr };
+    if (timeframe === "This Week")  return { from: new Date(now.getTime() - 7  * 86400000).toISOString().split("T")[0], to: todayStr };
+    if (timeframe === "This Month") return { from: new Date(now.getTime() - 30 * 86400000).toISOString().split("T")[0], to: todayStr };
+    return { from: customStart, to: customEnd };
+  }, [timeframe, customStart, customEnd, todayStr]);
 
-  const {
-    netResult, shopSales, othersSales, totalSales, totalDiscount, operationalCost,
-    totalExpenses, shopNet, totalInventorySales, trendData, breakdownData, inventoryFlow
-  } = useMemo(() => {
-    let sumShopSales = 0;
-    let sumDiscount = 0;
-    let sumOpCost = 0;
+  const inRange = useCallback((date: string) =>
+    !!date && date >= dateRange.from && date <= dateRange.to,
+  [dateRange]);
 
-    const filteredOut = filterByDateRange(allSales).filter(r => !String(r.billId || r.refId).startsWith("PREP"));
-    sumShopSales = filteredOut.reduce((s: number, r: any) => s + (Number(r.total) || 0), 0);
-    sumDiscount = filteredOut.reduce((s: number, r: any) => s + (Number(r.discountGiven) || 0), 0);
+  // ── KPI Aggregation ───────────────────────────────────────────────────────
+  const kpis = useMemo(() => {
+    const fSales    = allSales.filter(s => inRange(s.date) && !String(s.billId || "").startsWith("PREP"));
+    const fCosts    = allCosts.filter(c => inRange(c.date));
+    const fInvIn    = allInvIn.filter(i => inRange(i.date));
+    const fSupplies = allSupplies.filter(s => inRange(s.date));
 
-    const filteredCosts = filterByDateRange(allCosts);
-    sumOpCost = filteredCosts.reduce((s: number, r: any) => s + (Number(r.total) || 0), 0);
+    const totalSales      = fSales.reduce((a, s) => a + (s.total         || 0), 0);
+    const totalDiscount   = fSales.reduce((a, s) => a + (s.discountGiven || 0), 0);
+    const cashReceived    = fSales.reduce((a, s) => a + (s.cash          || 0), 0);
+    const phonePeReceived = fSales.reduce((a, s) => a + (s.phonePe       || 0), 0);
+    const operationalCost = fCosts.reduce((a, c) => a + (c.total         || 0), 0);
+    const inventoryIn     = fInvIn.reduce((a, i) => a + (i.totalAmount   || 0), 0);
 
-    const filteredSupply = filterByDateRange(allSupplies);
-    // Previously: r.shopNo starting with "Others". In backend we use `externalRecipient`
-    let sumOthersSales = filteredSupply
-      .filter((r: any) => !r.shopId || r.externalRecipient?.name)
-      .reduce((s: number, r: any) => s + (Number(r.totalAmount) || 0), 0);
+    // External supply cost (goods sent to external, not to registered shops)
+    const externalSupplyCost = fSupplies
+      .filter(s => !s.shopId && s.externalRecipient?.name)
+      .reduce((a, s) => a + (s.totalAmount || 0), 0);
 
-    const tSales = sumShopSales + sumOthersSales;
-    const nSales = tSales - sumDiscount;
-    const fResult = nSales - sumOpCost;
-    
-    // Generate trend data grouped by day
-    const trendMap: Record<string, number> = {};
-    const days = filterByDateRange(allSales).map(r => r.date);
-    const uniqueDays = Array.from(new Set(days)).sort();
-    
-    uniqueDays.forEach(d => {
-      const daySales = allSales.filter(s => s.date === d && !String(s.billId || s.refId).startsWith("PREP"));
-      const dayCosts = allCosts.filter(c => c.date === d);
-      const dayRev = daySales.reduce((acc, sale) => acc + (sale.total || 0), 0);
-      const dayExp = daySales.reduce((acc, sale) => acc + (sale.discountGiven || 0), 0) + 
-                     dayCosts.reduce((acc, cost) => acc + (cost.total || 0), 0);
-      trendMap[d] = dayRev - dayExp;
-    });
-
-    const chartTrend = uniqueDays.length > 0 
-      ? uniqueDays.map(d => ({ name: d.substring(5), Profit_Loss: trendMap[d] }))
-      : [
-          { name: 'Start', Profit_Loss: 0 },
-          { name: 'Mid', Profit_Loss: fResult * 0.4 },
-          { name: 'Current', Profit_Loss: fResult }
-        ];
-    
-    const chartBreakdown = [
-      { name: 'Sales', Value: tSales },
-      { name: 'Expenses', Value: sumDiscount + sumOpCost }
-    ];
-
-    const chartFlow = [
-      { name: 'Stock In', Value: mainInventory.length * 50 }, // Arbitrary estimation until full flow is established
-      { name: 'Stock Out', Value: sumShopSales > 0 ? sumShopSales / 400 : 0 }
-    ];
+    // Business: totalSales - (inventoryIn + operational + externalSupply + discount)
+    const businessProfit = totalSales - (inventoryIn + operationalCost + externalSupplyCost + totalDiscount);
+    // Shop:     totalSales - (inventoryIn + operational + discount)
+    const shopProfit     = totalSales - (inventoryIn + operationalCost + totalDiscount);
+    const combinedOverheads = externalSupplyCost + operationalCost + totalDiscount;
 
     return {
-      totalSales: tSales,
-      shopSales: sumShopSales,
-      othersSales: sumOthersSales,
-      totalDiscount: sumDiscount,
-      operationalCost: sumOpCost,
-      netSales: nSales,
-      shopNet: sumShopSales - sumDiscount,
-      totalInventorySales: (sumShopSales - sumDiscount) + sumOthersSales,
-      netResult: fResult,
-      totalExpenses: sumDiscount + sumOpCost,
-      trendData: chartTrend,
-      breakdownData: chartBreakdown,
-      inventoryFlow: chartFlow
+      totalSales, totalDiscount, cashReceived, phonePeReceived,
+      operationalCost, inventoryIn, externalSupplyCost,
+      businessProfit, shopProfit, combinedOverheads,
+      _fSales: fSales, _fCosts: fCosts, _fInvIn: fInvIn,
     };
-  }, [timeframe, customStart, customEnd, todayStr, allSales, allCosts, allSupplies, mainInventory]);
+  }, [allSales, allCosts, allInvIn, allSupplies, inRange]);
 
-  const handleExportAnalytics = () => {
-    alert(`Exporting Global Analytics (${exportRange}) in ${exportFormat} format!`);
-  };
+  // ── Waterfall Data ────────────────────────────────────────────────────────
+  const waterfallData = useMemo(() => {
+    const { inventoryIn, externalSupplyCost, operationalCost, totalDiscount, totalSales, businessProfit } = kpis;
+    return [
+      { name: "Inv. In",     value: inventoryIn,       type: "cost",    label: "Inventory In Value" },
+      { name: "Supply",      value: externalSupplyCost, type: "cost",   label: "External Supply Cost" },
+      { name: "Operational", value: operationalCost,   type: "cost",    label: "Operational Cost" },
+      { name: "Discount",    value: totalDiscount,     type: "cost",    label: "Discount Given" },
+      { name: "Sales",       value: totalSales,        type: "revenue", label: "Total Sales" },
+      { name: "Net Profit",  value: businessProfit,    type: businessProfit >= 0 ? "profit" : "loss", label: "Net Business Profit" },
+    ];
+  }, [kpis]);
 
+  // ── Batch Chart Data ──────────────────────────────────────────────────────
+  const batchChartData = useMemo(() => {
+    const { _fSales, _fCosts, _fInvIn } = kpis;
+
+    // Map batchNo → shopIds that received it (from filtered invIn records)
+    const batchShops: Record<string, Set<string>> = {};
+    _fInvIn.forEach(i => {
+      if (!batchShops[i.batch]) batchShops[i.batch] = new Set();
+      batchShops[i.batch].add(i.shopId);
+    });
+
+    // Build per-batch aggregates
+    const batchMap: Record<string, {
+      name: string; inventoryIn: number; salesValue: number;
+      discount: number; opCost: number; shopProfit: number;
+    }> = {};
+
+    // Seed from allBatches (to show even zero-data batches if needed)
+    allBatches.forEach(b => {
+      batchMap[b.batchNo] = { name: b.batchNo, inventoryIn: 0, salesValue: 0, discount: 0, opCost: 0, shopProfit: 0 };
+    });
+
+    // Add inventoryIn per batch
+    _fInvIn.forEach(i => {
+      if (!batchMap[i.batch]) batchMap[i.batch] = { name: i.batch, inventoryIn: 0, salesValue: 0, discount: 0, opCost: 0, shopProfit: 0 };
+      batchMap[i.batch].inventoryIn += (i.totalAmount || 0);
+    });
+
+    // Attribute sales/costs per batch via the shops that received each batch
+    Object.keys(batchShops).forEach(batchNo => {
+      const shopIds = batchShops[batchNo];
+      const bSales = _fSales.filter(s => shopIds.has(s.shopId));
+      const bCosts = _fCosts.filter(c => shopIds.has(c.shopId));
+      if (!batchMap[batchNo]) batchMap[batchNo] = { name: batchNo, inventoryIn: 0, salesValue: 0, discount: 0, opCost: 0, shopProfit: 0 };
+      batchMap[batchNo].salesValue = bSales.reduce((a, s) => a + (s.total         || 0), 0);
+      batchMap[batchNo].discount   = bSales.reduce((a, s) => a + (s.discountGiven || 0), 0);
+      batchMap[batchNo].opCost     = bCosts.reduce((a, c) => a + (c.total         || 0), 0);
+      batchMap[batchNo].shopProfit =
+        batchMap[batchNo].salesValue -
+        batchMap[batchNo].inventoryIn -
+        batchMap[batchNo].opCost -
+        batchMap[batchNo].discount;
+    });
+
+    return Object.values(batchMap).filter(b => b.inventoryIn > 0 || b.salesValue > 0);
+  }, [allBatches, kpis]);
+
+  // ── Notes Grouping ────────────────────────────────────────────────────────
+  const groupedNotes = useMemo(() => {
+    const map: Record<string, { shopName: string; notes: NoteRecord[] }> = {};
+    notes.forEach(n => {
+      const id   = typeof n.shopId === "object" ? n.shopId._id  : String(n.shopId);
+      const name = typeof n.shopId === "object" ? n.shopId.name : "Unknown Shop";
+      if (!map[id]) map[id] = { shopName: name, notes: [] };
+      map[id].notes.push(n);
+    });
+    return Object.values(map);
+  }, [notes]);
+
+  // ── Loading / Error ───────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="flex flex-col h-[60vh] items-center justify-center p-12 text-center text-muted-foreground w-full">
-        <Loader2 className="h-12 w-12 animate-spin mb-4 text-primary" />
-        <h2 className="text-xl font-semibold mb-2 text-foreground">Loading Dashboard Data...</h2>
+      <div className="flex flex-col h-[60vh] items-center justify-center text-muted-foreground">
+        <Loader2 className="h-10 w-10 animate-spin mb-4 text-primary" />
+        <p className="text-sm font-semibold">Loading dashboard data…</p>
       </div>
     );
   }
 
-  return (
-    <div className="animate-fade-in pb-12 w-full">
-      <div className="flex flex-col gap-4 mb-2">
-        <Breadcrumb items={[{ label: "Global Control Center Dashboard" }]} />
+  if (error) {
+    return (
+      <div className="flex flex-col h-[60vh] items-center justify-center text-center p-8">
+        <AlertTriangle className="h-10 w-10 mb-4 text-destructive" />
+        <h2 className="text-lg font-bold text-foreground mb-2">Failed to load dashboard</h2>
+        <p className="text-sm text-muted-foreground mb-4">{error}</p>
+        <Button onClick={() => window.location.reload()} className="bg-primary text-white rounded-sm">Retry</Button>
       </div>
+    );
+  }
 
+  // Destructure for render
+  const {
+    totalSales, totalDiscount, cashReceived, phonePeReceived,
+    operationalCost, inventoryIn, externalSupplyCost,
+    businessProfit, shopProfit, combinedOverheads,
+  } = kpis;
+
+  const LABEL_CLASS = "text-xs font-black text-muted-foreground uppercase tracking-widest mb-3";
+  const hasNoData   = totalSales === 0 && inventoryIn === 0 && operationalCost === 0;
+
+  return (
+    <div className="animate-fade-in pb-12 w-full space-y-8">
+
+      <Breadcrumb items={[{ label: "Global Control Center Dashboard" }]} />
+
+      {/* ── SECTION 1: SHOP NOTES ── */}
       {groupedNotes.length > 0 && (
-         <div className="mb-6 w-full animate-in fade-in zoom-in-95 duration-300">
-            <h2 className="text-sm font-black text-muted-foreground uppercase tracking-widest mb-3">Shop Notes</h2>
-            <Card className="bg-muted/30 shadow-none border rounded-sm">
-               <CardContent className="p-5">
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                   {groupedNotes.map(group => (
-                      <div key={group.shop._id || group.shop.id || Math.random()}>
-                         <h3 className="text-primary font-bold mb-2">{group.shop.name}</h3>
-                         <ul className="space-y-2">
-                            {group.notes.map((note: any, idx: number) => (
-                               <li key={note._id || note.id || idx} className="flex justify-between items-start gap-4 text-sm text-foreground">
-                                  <span className="flex-1">• {note.text}</span>
-                                  <span className="text-[10px] font-bold text-muted-foreground shrink-0 pt-1">{note.date}</span>
-                               </li>
-                            ))}
-                         </ul>
-                      </div>
-                   ))}
+        <section>
+          <h2 className={LABEL_CLASS}>📌 Shop Notes</h2>
+          <Card className="rounded-sm shadow-none border bg-card">
+            <CardContent className="p-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {groupedNotes.map((group, i) => (
+                  <div key={i}>
+                    <h3 className="text-sm font-black mb-2" style={{ color: C_PRIMARY }}>
+                      {group.shopName}
+                    </h3>
+                    <ul className="space-y-1.5">
+                      {group.notes.map((note, j) => (
+                        <li key={note._id || j} className="flex gap-2 items-start text-sm text-foreground">
+                          <span className="shrink-0 mt-0.5" style={{ color: C_PRIMARY }}>•</span>
+                          <span className="flex-1">{note.text}</span>
+                          <span className="text-[10px] font-bold text-muted-foreground shrink-0 pt-0.5">{note.date}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-               </CardContent>
-            </Card>
-         </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </section>
       )}
 
-      <div className="flex flex-col gap-4 mb-8">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-black text-foreground tracking-tight">Financial Control Center</h1>
-            <p className="text-sm text-muted-foreground mt-1 font-medium">Global operations and financial overview.</p>
-          </div>
-          <div className="flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-sm font-bold">
-            <span className="hidden sm:inline">Welcome,</span> Pinaka
-          </div>
+      {/* ── Header ── */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black text-foreground tracking-tight">Financial Control Center</h1>
+          <p className="text-sm text-muted-foreground mt-1">Global operations overview — Pinaka ERP</p>
+        </div>
+        <div className="flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-sm font-bold text-sm">
+          <Store className="w-4 h-4" /> {shopsList.length} Active Shop{shopsList.length !== 1 ? "s" : ""}
         </div>
       </div>
 
-      <div className="flex flex-col mb-8 gap-6">
-        <div className="flex flex-col xl:flex-row items-stretch xl:items-center gap-3 w-full">
-          <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-2 w-full lg:w-auto">
-            <div className="p-1.5 rounded-sm flex flex-wrap items-center shadow-none border gap-1" style={{backgroundColor: 'var(--navbar-bg)', borderColor: 'var(--border)'}}>
-              {["Today", "This Week", "This Month", "Custom"].map((t) => (
-                <button 
-                  key={t}
-                  onClick={() => setTimeframe(t as any)} 
-                  className={cn(
-                    "whitespace-nowrap flex-1 lg:flex-none px-4 lg:px-6 min-h-[44px] rounded-sm text-sm font-bold transition-all", 
-                    timeframe === t ? "bg-primary text-primary-foreground shadow-none scale-100" : "text-muted-foreground hover:text-foreground hover:bg-primary/10"
-                  )}
-                >
-                  {t}
-                </button>
-              ))}
-            {timeframe === "Custom" && (
-              <div className="flex flex-col sm:flex-row items-center gap-2 bg-card p-2 rounded-sm border border-[var(--border)] shadow-none animate-in fade-in slide-in-from-left-4 duration-300 w-full lg:w-auto mt-2 lg:mt-0">
-                <div className="w-full sm:w-[130px]">
-                  <AdvancedDatePicker value={customStart} onChange={(val) => setCustomStart(val)} placeholder="Start Date" />
-                </div>
-                <span className="text-muted-foreground font-bold">-</span>
-                <div className="w-full sm:w-[130px]">
-                  <AdvancedDatePicker value={customEnd} onChange={(val) => setCustomEnd(val)} placeholder="End Date" />
-                </div>
-              </div>
+      {/* ── SECTION 2: DATE FILTER BAR ── */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div
+          className="p-1 rounded-sm flex items-center gap-1 border"
+          style={{ backgroundColor: "var(--navbar-bg)", borderColor: "var(--border)" }}
+        >
+          {(["Today", "This Week", "This Month", "Custom"] as const).map(t => (
+            <button
+              key={t}
+              onClick={() => setTimeframe(t)}
+              className={cn(
+                "px-4 py-2 rounded-sm text-sm font-bold transition-all whitespace-nowrap",
+                timeframe === t
+                  ? "bg-primary text-white"
+                  : "text-muted-foreground hover:text-foreground hover:bg-primary/10"
+              )}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+
+        {timeframe === "Custom" && (
+          <div className="flex items-center gap-2 bg-card border rounded-sm px-3 py-1.5">
+            <AdvancedDatePicker value={customStart} onChange={val => setCustomStart(val)} placeholder="Start Date" />
+            <span className="text-muted-foreground font-bold">–</span>
+            <AdvancedDatePicker value={customEnd}   onChange={val => setCustomEnd(val)}   placeholder="End Date" />
+          </div>
+        )}
+
+        <span className="text-xs text-muted-foreground font-medium">
+          {dateRange.from === dateRange.to ? dateRange.from : `${dateRange.from} → ${dateRange.to}`}
+        </span>
+      </div>
+
+      {/* ── SECTION 3: FINANCIAL KPI CARDS ── */}
+      <section>
+        <h2 className={LABEL_CLASS}>Financial KPIs</h2>
+
+        {/* Big Net Result + 4 sub cards */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+
+          {/* Shop Profit hero card */}
+          <Card
+            className={cn(
+              "lg:col-span-1 rounded-sm shadow-none border-l-4 relative overflow-hidden flex flex-col items-center justify-center p-10 bg-card text-center",
+              shopProfit >= 0 ? "border-l-[#16A34A]" : "border-l-[#DC2626]"
             )}
-            
-            {/* SECTION 6 — EXPORT FEATURE */}
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="h-11 rounded-sm font-bold bg-card border border-[var(--border)] shadow-none hover:text-primary hover:border-primary/30 transition-all px-4 flex items-center gap-2 w-full lg:w-auto mt-2 lg:mt-0" style={{color: 'var(--text-primary)'}}>
-                  <DownloadCloud className="w-4 h-4" /> Download
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>Export Analytics Report</DialogTitle>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="space-y-1.5">
-                    <Label>Format</Label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button variant={exportFormat === "CSV" ? "default" : "outline"} className={exportFormat === "CSV" ? "bg-primary hover:bg-primary/80 text-primary-foreground" : "text-foreground"} onClick={() => setExportFormat("CSV")}>CSV Data</Button>
-                      <Button variant={exportFormat === "PDF" ? "default" : "outline"} className={exportFormat === "PDF" ? "bg-primary hover:bg-primary/80 text-primary-foreground" : "text-foreground"} onClick={() => setExportFormat("PDF")}>PDF Report</Button>
-                    </div>
+          >
+            <p className="text-xs font-black tracking-widest uppercase mb-2"
+               style={{ color: shopProfit >= 0 ? C_PROFIT : C_COST, opacity: 0.8 }}>
+              Shop Profit (Excl. Supply)
+            </p>
+            <h2 className="text-5xl font-black tracking-tighter mb-3"
+                style={{ color: shopProfit >= 0 ? C_PROFIT : C_COST }}>
+              {shopProfit < 0 ? "−" : ""}₹{Math.abs(shopProfit).toLocaleString("en-IN")}
+            </h2>
+            <span
+              className="text-xs font-black px-3 py-1.5 rounded-sm uppercase tracking-widest text-white"
+              style={{ backgroundColor: shopProfit >= 0 ? C_PROFIT : C_COST }}
+            >
+              {shopProfit >= 0 ? "PROFIT" : "LOSS"}
+            </span>
+
+            {/* Business profit row */}
+            <div className="mt-6 w-full pt-4 border-t border-border/40 text-center">
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">
+                Net Business Profit (Incl. Supply)
+              </p>
+              <p className="text-xl font-black"
+                 style={{ color: businessProfit >= 0 ? C_PROFIT : C_COST }}>
+                {businessProfit < 0 ? "−" : ""}₹{Math.abs(businessProfit).toLocaleString("en-IN")}
+              </p>
+            </div>
+
+            <div className="absolute right-[-32px] bottom-[-32px] opacity-[0.05] pointer-events-none">
+              <Activity className="w-64 h-64" style={{ color: shopProfit >= 0 ? C_PROFIT : C_COST }} />
+            </div>
+          </Card>
+
+          {/* 4 secondary KPI cards */}
+          <div className="lg:col-span-2 grid grid-cols-2 gap-4">
+            {[
+              { label: "Total Sales",      value: totalSales,                      color: C_REVENUE, Icon: TrendingUp,    sub: `${(allSales.filter(s => inRange(s.date) && !String(s.billId||"").startsWith("PREP")).length)} bills` },
+              { label: "Total Expenses",   value: operationalCost + totalDiscount, color: C_COST,    Icon: TrendingDown,  sub: `Disc ₹${Math.round(totalDiscount).toLocaleString("en-IN")} + Op ₹${Math.round(operationalCost).toLocaleString("en-IN")}` },
+              { label: "Cash Received",    value: cashReceived,                    color: "#374151",  Icon: Wallet,        sub: "Retail cash payments" },
+              { label: "PhonePe Received", value: phonePeReceived,                 color: "#7C3AED",  Icon: Smartphone,    sub: "Digital payments" },
+            ].map(({ label, value, color, Icon, sub }) => (
+              <Card key={label} className="rounded-sm shadow-none border bg-card relative overflow-hidden hover:bg-card-hover transition-colors">
+                <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: color }} />
+                <CardContent className="p-5 pl-6">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <Icon className="w-3.5 h-3.5" style={{ color }} />
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{label}</p>
                   </div>
-                  <div className="space-y-1.5 mt-2">
-                    <Label>Date Range</Label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button variant={exportRange === "Daily" ? "default" : "outline"} className={exportRange === "Daily" ? "bg-primary hover:bg-primary/80 text-primary-foreground" : "text-foreground"} onClick={() => setExportRange("Daily")}>Today</Button>
-                      <Button variant={exportRange === "Weekly" ? "default" : "outline"} className={exportRange === "Weekly" ? "bg-primary hover:bg-primary/80 text-primary-foreground" : "text-foreground"} onClick={() => setExportRange("Weekly")}>This Week</Button>
-                      <Button variant={exportRange === "Monthly" ? "default" : "outline"} className={exportRange === "Monthly" ? "bg-primary hover:bg-primary/80 text-primary-foreground" : "text-foreground"} onClick={() => setExportRange("Monthly")}>This Month</Button>
-                      <Button variant={exportRange === "Custom" ? "default" : "outline"} className={exportRange === "Custom" ? "bg-primary hover:bg-primary/80 text-primary-foreground" : "text-foreground"} onClick={() => setExportRange("Custom")}>Custom Range</Button>
-                    </div>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button onClick={handleExportAnalytics} className="bg-primary hover:bg-primary/80 text-primary-foreground">Export Data</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                  <h3 className="text-2xl font-black text-foreground tracking-tight">
+                    ₹{Math.round(value).toLocaleString("en-IN")}
+                  </h3>
+                  <p className="text-[10px] text-muted-foreground mt-1">{sub}</p>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </div>
-      </div>
-    </div>
+      </section>
 
-      {/* SECTION 1 — NET RESULT (DOMINANT CARD) */}
-      <Card className={cn(
-        "rounded-sm border shadow-none relative overflow-hidden flex flex-col items-center justify-center p-12 transition-colors bg-card", 
-        netResult >= 0 ? "border-l-4 border-l-success" : "border-l-4 border-l-destructive"
-      )}>
-         <p className={cn("text-lg font-bold tracking-[0.3em] mb-4 uppercase", netResult >= 0 ? "text-success/80" : "text-destructive/80")}>Net Result</p>
-         <h2 className={cn("text-7xl font-black tracking-tighter mb-8", netResult >= 0 ? "text-success" : "text-destructive")}>
-           {netResult < 0 ? "-" : ""}₹{Math.abs(netResult).toLocaleString("en-IN")}
-         </h2>
-         <div className="flex items-center gap-3">
-            <span className={cn("text-sm font-black px-4 py-2 rounded-sm uppercase tracking-widest shadow-none", netResult >= 0 ? "bg-success text-success-foreground" : "bg-destructive text-destructive-foreground")}>
-              {netResult >= 0 ? "PROFIT" : "LOSS"}
-            </span>
-         </div>
-         
-         <div className="absolute right-[-48px] bottom-[-48px] opacity-[0.06] pointer-events-none">
-           <Activity className={cn("w-96 h-96", netResult >= 0 ? "text-success" : "text-destructive")} />
-         </div>
+      {/* ── SECTION 4: COST → REVENUE PIPELINE ── */}
+      <section>
+        <h2 className={LABEL_CLASS}>Cost → Revenue Pipeline</h2>
 
-         {/* Sub-breakdown inside card */}
-         <div className="mt-12 w-full max-w-3xl grid grid-cols-1 md:grid-cols-3 gap-6 bg-background/30 backdrop-blur-sm p-6 rounded-sm border border-border/30">
-            <div className="flex flex-col items-center justify-center border-r border-border/30 last:border-0 px-4">
-              <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Total Sales</span>
-              <span className="text-xl font-bold text-foreground">₹{totalSales.toLocaleString("en-IN")}</span>
-            </div>
-            <div className="flex flex-col items-center justify-center border-r border-border/30 last:border-0 px-4">
-              <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Discount</span>
-              <span className="text-xl font-bold text-foreground">₹{totalDiscount.toLocaleString("en-IN")}</span>
-            </div>
-            <div className="flex flex-col items-center justify-center px-4">
-              <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Operational Cost</span>
-              <span className="text-xl font-bold text-foreground">₹{operationalCost.toLocaleString("en-IN")}</span>
-            </div>
-         </div>
-      </Card>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        
-        {/* SECTION 2 — EXPENSES */}
-        <Card className="rounded-sm border shadow-none bg-card hover:bg-card-hover transition-all">
-           <CardContent className="p-8">
-             <div className="flex justify-between items-center bg-destructive/5 rounded-sm border border-destructive/10 p-3 mb-6">
-                <span className="text-sm font-black text-destructive tracking-widest uppercase flex items-center gap-2"><ArrowDownRight className="w-4 h-4" /> Total Expenses</span>
-                <span className="text-3xl font-black text-destructive">₹{totalExpenses.toLocaleString("en-IN")}</span>
-             </div>
-             <div className="flex flex-col gap-4">
-                <div className="flex justify-between items-center border-b pb-3">
-                  <span className="text-sm font-semibold text-muted-foreground uppercase">Discount Given</span>
-                  <span className="text-lg font-bold text-foreground">₹{totalDiscount.toLocaleString("en-IN")}</span>
+        {/* Pipeline KPI mini-row */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+          {[
+            { label: "Inventory In Value",    value: inventoryIn,         color: C_COST,    Icon: Package },
+            { label: "Combined Overheads",    value: combinedOverheads,   color: C_OPEX,    Icon: IndianRupee },
+            { label: "Total Sales",           value: totalSales,          color: C_REVENUE, Icon: TrendingUp },
+            {
+              label: "Net Business Profit",
+              value: businessProfit,
+              color: businessProfit >= 0 ? C_PROFIT : C_COST,
+              Icon: businessProfit >= 0 ? TrendingUp : TrendingDown,
+            },
+          ].map(({ label, value, color, Icon }) => (
+            <Card key={label} className="rounded-sm shadow-none border bg-card">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Icon className="w-3 h-3" style={{ color }} />
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{label}</p>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-semibold text-muted-foreground uppercase">Operational Cost</span>
-                  <span className="text-lg font-bold text-foreground">₹{operationalCost.toLocaleString("en-IN")}</span>
-                </div>
-             </div>
-           </CardContent>
+                <h4 className="text-lg font-black" style={{ color }}>
+                  {value < 0 ? "−" : ""}₹{Math.abs(Math.round(value)).toLocaleString("en-IN")}
+                </h4>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Waterfall Bar Chart */}
+        <Card className="rounded-sm shadow-none border bg-card">
+          <CardHeader className="pb-0">
+            <CardTitle className="text-xs uppercase font-bold tracking-widest text-muted-foreground">
+              Financial Pipeline — Cost to Profit Breakdown
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-4 h-[300px]">
+            {hasNoData ? (
+              <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                <AlertTriangle className="w-8 h-8 mb-2 opacity-30" />
+                <p className="text-xs font-bold uppercase tracking-widest">No data for selected period</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={waterfallData} margin={{ top: 20, right: 16, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
+                  <XAxis
+                    dataKey="name"
+                    axisLine={false} tickLine={false}
+                    tick={{ fontSize: 11, fill: "var(--chart-text)" }}
+                  />
+                  <YAxis
+                    axisLine={false} tickLine={false}
+                    tick={{ fontSize: 11, fill: "var(--chart-text)" }}
+                    tickFormatter={v => `₹${(v / 1000).toFixed(0)}K`}
+                  />
+                  <RechartsTooltip content={<WaterfallTooltip />} cursor={{ fill: "var(--chart-bg)" }} />
+                  <Bar dataKey="value" maxBarSize={60} radius={[2, 2, 0, 0]}>
+                    {waterfallData.map((entry, i) => (
+                      <Cell
+                        key={i}
+                        fill={
+                          entry.type === "revenue" ? C_REVENUE
+                          : entry.type === "profit" ? C_PROFIT
+                          : entry.type === "loss"   ? C_COST
+                          : C_COST
+                        }
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
         </Card>
+      </section>
 
-        {/* SECTION 4 — INVENTORY SALES */}
-        <Card className="rounded-sm border shadow-none bg-card hover:bg-card-hover transition-all">
-           <CardContent className="p-8">
-             <div className="flex justify-between items-center bg-info/5 rounded-sm border border-info/10 p-3 mb-6">
-                <span className="text-sm font-black text-info tracking-widest uppercase flex items-center gap-2"><DollarSign className="w-4 h-4" /> Inventory Sales</span>
-                <span className="text-3xl font-black text-info">₹{totalInventorySales.toLocaleString("en-IN")}</span>
-             </div>
-             <div className="flex flex-col gap-4">
-                <div className="flex justify-between items-center border-b pb-3">
-                  <span className="text-sm font-semibold text-muted-foreground uppercase">Shop Sales (Net after discount)</span>
-                  <span className="text-lg font-bold text-foreground">₹{shopNet.toLocaleString("en-IN")}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-semibold text-muted-foreground uppercase">Others Sales</span>
-                  <span className="text-lg font-bold text-foreground">₹{othersSales.toLocaleString("en-IN")}</span>
-                </div>
-             </div>
-           </CardContent>
-        </Card>
+      {/* ── SECTION 5: SHOP SALES SECTION (batch-level charts) ── */}
+      <section>
+        <h2 className={LABEL_CLASS}>Shop Sales by Batch</h2>
 
+        {batchChartData.length === 0 ? (
+          <Card className="rounded-sm shadow-none border bg-card">
+            <CardContent className="flex flex-col items-center justify-center h-48 text-muted-foreground">
+              <AlertTriangle className="w-8 h-8 mb-2 opacity-30" />
+              <p className="text-xs font-bold uppercase tracking-widest">No batch data available for this period</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+
+            {/* LEFT — Stacked Bar: Inventory In, Sales, Discount, Op Cost per batch */}
+            <Card className="rounded-sm shadow-none border bg-card">
+              <CardHeader className="pb-0">
+                <CardTitle className="text-xs uppercase font-bold tracking-widest text-muted-foreground">
+                  Batch Breakdown — Inv. In vs Sales vs Costs
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4 h-[320px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={batchChartData} margin={{ top: 10, right: 16, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
+                    <XAxis
+                      dataKey="name"
+                      axisLine={false} tickLine={false}
+                      tick={{ fontSize: 10, fill: "var(--chart-text)" }}
+                    />
+                    <YAxis
+                      axisLine={false} tickLine={false}
+                      tick={{ fontSize: 10, fill: "var(--chart-text)" }}
+                      tickFormatter={v => `₹${(v / 1000).toFixed(0)}K`}
+                    />
+                    <RechartsTooltip content={<BatchTooltip />} cursor={{ fill: "var(--chart-bg)" }} />
+                    <Legend
+                      wrapperStyle={{ fontSize: 10, paddingTop: 8 }}
+                      formatter={v => <span style={{ color: "var(--chart-text)" }}>{v}</span>}
+                    />
+                    <Bar dataKey="inventoryIn" name="Inventory In"    stackId="a" fill={C_COST}    maxBarSize={50} />
+                    <Bar dataKey="discount"    name="Discount"        stackId="a" fill={C_DISC}    maxBarSize={50} />
+                    <Bar dataKey="opCost"      name="Operational"     stackId="a" fill={C_OPEX}    maxBarSize={50} />
+                    <Bar dataKey="salesValue"  name="Sales Value"     fill={C_REVENUE} maxBarSize={50} radius={[2, 2, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            {/* RIGHT — Profit/Loss per batch (Composed Bar + Line) */}
+            <Card className="rounded-sm shadow-none border bg-card">
+              <CardHeader className="pb-0">
+                <CardTitle className="text-xs uppercase font-bold tracking-widest text-muted-foreground">
+                  Shop Profit / Loss per Batch
+                </CardTitle>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  Formula: Sales − (Inv. In + Operational + Discount)
+                </p>
+              </CardHeader>
+              <CardContent className="pt-4 h-[320px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={batchChartData} margin={{ top: 10, right: 16, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
+                    <XAxis
+                      dataKey="name"
+                      axisLine={false} tickLine={false}
+                      tick={{ fontSize: 10, fill: "var(--chart-text)" }}
+                    />
+                    <YAxis
+                      axisLine={false} tickLine={false}
+                      tick={{ fontSize: 10, fill: "var(--chart-text)" }}
+                      tickFormatter={v => `₹${(v / 1000).toFixed(0)}K`}
+                    />
+                    <RechartsTooltip content={<PLTooltip />} cursor={{ fill: "var(--chart-bg)" }} />
+                    <ReferenceLine y={0} stroke="var(--border)" strokeWidth={2} />
+                    <Bar dataKey="shopProfit" name="Shop Profit" maxBarSize={50} radius={[2, 2, 0, 0]}>
+                      {batchChartData.map((entry, i) => (
+                        <Cell key={i} fill={entry.shopProfit >= 0 ? C_PROFIT : C_COST} />
+                      ))}
+                    </Bar>
+                    <Line
+                      type="monotone"
+                      dataKey="shopProfit"
+                      name="Trend"
+                      stroke={C_PRIMARY}
+                      strokeWidth={2}
+                      dot={{ r: 3, fill: C_PRIMARY }}
+                      activeDot={{ r: 5 }}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+          </div>
+        )}
+      </section>
+
+      {/* ── Summary Footer ── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+        {[
+          { label: "Active Shops",     value: shopsList.length,      unit: "" },
+          { label: "Total Batches",    value: allBatches.length,     unit: "" },
+          { label: "Supply Records",   value: allSupplies.length,    unit: "" },
+          { label: "External Supply",  value: externalSupplyCost,    unit: "₹", isRupee: true },
+        ].map(({ label, value, unit, isRupee }) => (
+          <Card key={label} className="rounded-sm shadow-none border bg-card">
+            <CardContent className="p-4">
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">{label}</p>
+              <p className="text-xl font-black text-foreground">
+                {isRupee ? `₹${Math.round(value as number).toLocaleString("en-IN")}` : value}
+              </p>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-
-      {/* SECTION 5 — ANALYTICS */}
-      <div className="w-full pt-4">
-         <h2 className="text-sm font-black text-muted-foreground uppercase tracking-widest mb-4">Analytics Visualization</h2>
-         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            <Card className="rounded-sm bg-card border border-border shadow-none">
-              <CardHeader className="pb-0">
-                <CardTitle className="text-xs uppercase font-bold tracking-widest text-muted-foreground">Net Result Trend</CardTitle>
-                <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">{timeframe === "Custom" ? "Custom Range" : timeframe}</p>
-              </CardHeader>
-              <CardContent className="pt-4 h-[280px] w-full">
-                {trendData.some((d: any) => d.Profit_Loss !== 0) ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={trendData} margin={{ top: 20, right: 20, left: 10, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--chart-text)' }} />
-                      <RechartsTooltip formatter={(value: number) => [`₹${value.toLocaleString('en-IN')}`, 'Net Result']} />
-                      <Line type="monotone" dataKey="Profit_Loss" stroke={netResult >= 0 ? "var(--chart-3)" : "var(--chart-5)"} strokeWidth={3} dot={{ r: 4 }}>
-                         <LabelList dataKey="Profit_Loss" position="top" formatter={(value: number) => `₹${value.toLocaleString('en-IN')}`} fontSize={10} fill="var(--chart-text)" />
-                      </Line>
-                      <Legend verticalAlign="top" content={() => (
-                        <div className="flex justify-center gap-4 text-[10px] font-bold pb-2 uppercase tracking-wider">
-                           <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-success"></div>Profit</span>
-                           <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-destructive"></div>Loss</span>
-                        </div>
-                      )} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex flex-col items-center justify-center p-8 bg-muted/20 border-dashed border-2 rounded-sm h-full">
-                    <AlertCircle className="w-8 h-8 text-muted-foreground/30 mb-2" />
-                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest text-center">No financial data yet</span>
-                  </div>
-                )}
-              </CardContent>
-              <div className="px-6 py-3 border-t bg-muted rounded-b-xl text-center mt-2">
-                <p className="text-xs font-semibold text-muted-foreground">
-                  {netResult === 0 ? "No result data to display." : (netResult > 0 ? `Trending positive with ₹${netResult.toLocaleString('en-IN')} profit.` : `Warning: Net loss of ₹${Math.abs(netResult).toLocaleString('en-IN')}.`)}
-                </p>
-              </div>
-            </Card>
-
-            <Card className="rounded-sm bg-card border border-border shadow-none">
-              <CardHeader className="pb-0">
-                <CardTitle className="text-xs uppercase font-bold tracking-widest text-muted-foreground">Sales vs Expenses</CardTitle>
-                <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">{timeframe === "Custom" ? "Custom Range" : timeframe}</p>
-              </CardHeader>
-              <CardContent className="pt-4 h-[280px] w-full">
-                {breakdownData.some((d: any) => d.Value !== 0) ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={breakdownData} margin={{ top: 20, right: 10, left: 10, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--chart-text)' }} />
-                      <RechartsTooltip cursor={{fill: 'transparent'}} formatter={(value: number) => [`₹${value.toLocaleString('en-IN')}`, 'Amount']} />
-                      <Bar dataKey="Value" radius={[4, 4, 0, 0]} maxBarSize={50}>
-                        {breakdownData.map((entry: any, index: number) => (
-                          <Cell key={`cell-${index}`} fill={entry.name === 'Sales' ? 'var(--primary)' : 'var(--chart-5)'} />
-                        ))}
-                        <LabelList dataKey="Value" position="top" formatter={(value: number) => value > 0 ? `₹${value.toLocaleString()}` : ''} fontSize={10} fill="var(--chart-text)" />
-                      </Bar>
-                      <Legend verticalAlign="top" content={() => (
-                        <div className="flex justify-center gap-4 text-[10px] font-bold pb-2 uppercase tracking-wider">
-                           <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-info"></div>Sales</span>
-                           <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-destructive"></div>Expenses</span>
-                        </div>
-                      )} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex flex-col items-center justify-center p-8 bg-muted/20 border-dashed border-2 rounded-sm h-full">
-                    <AlertCircle className="w-8 h-8 text-muted-foreground/30 mb-2" />
-                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest text-center">No expenses or sales recorded</span>
-                  </div>
-                )}
-              </CardContent>
-              <div className="px-6 py-3 border-t bg-muted rounded-b-xl text-center mt-2">
-                <p className="text-xs font-semibold text-muted-foreground">
-                  {totalSales === 0 && totalExpenses === 0 ? "No records found." : (totalExpenses === 0 ? "No expenses recorded this period." : `Expenses are ${Math.round((totalExpenses / (totalSales || 1)) * 100)}% of sales limit.`)}
-                </p>
-              </div>
-            </Card>
-
-            <Card className="rounded-sm bg-card border border-border shadow-none">
-              <CardHeader className="pb-0">
-                <CardTitle className="text-xs uppercase font-bold tracking-widest text-muted-foreground">Inventory Flow</CardTitle>
-                <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">{timeframe === "Custom" ? "Custom Range" : timeframe}</p>
-              </CardHeader>
-              <CardContent className="pt-4 h-[280px] w-full">
-                {inventoryFlow.some((d: any) => d.Value !== 0) ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={inventoryFlow} margin={{ top: 20, right: 10, left: 10, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--chart-text)' }} />
-                      <RechartsTooltip cursor={{fill: 'transparent'}} formatter={(value: number) => [Math.round(value), 'Units']} />
-                      <Bar dataKey="Value" radius={[4, 4, 0, 0]} maxBarSize={50}>
-                        {inventoryFlow.map((entry: any, index: number) => (
-                           <Cell key={`cell-${index}`} fill={entry.name === 'Stock In' ? 'var(--chart-3)' : 'var(--chart-6)'} />
-                        ))}
-                        <LabelList dataKey="Value" position="top" formatter={(value: number) => value > 0 ? Math.round(value) : ''} fontSize={10} fill="var(--chart-text)" />
-                      </Bar>
-                      <Legend verticalAlign="top" content={() => (
-                        <div className="flex justify-center gap-4 text-[10px] font-bold pb-2 uppercase tracking-wider">
-                           <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-success"></div>Stock In</span>
-                           <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-amber-500"></div>Stock Out</span>
-                        </div>
-                      )} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex flex-col items-center justify-center p-8 bg-muted/20 border-dashed border-2 rounded-sm h-full">
-                    <AlertCircle className="w-8 h-8 text-muted-foreground/30 mb-2" />
-                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest text-center">No inventory movement yet</span>
-                  </div>
-                )}
-              </CardContent>
-              <div className="px-6 py-3 border-t bg-muted rounded-b-xl text-center mt-2">
-                <p className="text-xs font-semibold text-muted-foreground">
-                   {inventoryFlow[0].Value === 0 && inventoryFlow[1].Value === 0 ? "No stock moved recently." : `Stock In outpaces Stock Out by ${Math.round(inventoryFlow[0].Value - inventoryFlow[1].Value)} units.`}
-                </p>
-              </div>
-            </Card>
-
-         </div>
-      </div>
-      
     </div>
   );
 }
-
