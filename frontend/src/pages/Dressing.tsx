@@ -8,6 +8,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Pencil, Trash2, ArrowLeft, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import api from "@/lib/api";
+import { cn } from "@/lib/utils";
+import { useCallback } from "react";
 
 const defaultPackaging = [
   { name: "Bone", price: 350 },
@@ -272,6 +274,14 @@ export default function Dressing() {
 
   const grandTotal = pkgItems.reduce((sum, item) => sum + item.qty * item.price, 0);
 
+  // ── Packaging Usable Meat Logic ───────────────────────────────────────────
+  const pkgBatchRecord = records.find(r => r._id === packagingId);
+  const usableInitial  = Number(pkgBatchRecord?.usableMeat) || 0;
+  // used_meat = bone + boneless + mixed + meat (Indices: 0, 1, 2, 4. Index 3 is Skin)
+  const usedMeat = (pkgItems[0]?.qty || 0) + (pkgItems[1]?.qty || 0) + (pkgItems[2]?.qty || 0) + (pkgItems[4]?.qty || 0);
+  const remainingMeat = usableInitial - usedMeat;
+  const isOverLimit   = usedMeat > usableInitial;
+
   const animalOptions = Array.from(new Set([
     ...records.filter(r => r.status === "Unslaughtered").map(r => ({ _id: r._id, animalId: r.animalId })),
   ]));
@@ -363,11 +373,18 @@ export default function Dressing() {
               <h2 className="text-lg font-semibold m-0">Packaging — Batch [{packagingBatch}]</h2>
             </div>
             
-            <div className="bg-primary/15 text-primary border border-primary/30 px-5 py-2.5 rounded-sm shadow-none font-bold text-sm tracking-wide self-start sm:self-auto">
-              Usable Meat: {(() => {
-                const pRec = records.find(r => r.batch === packagingBatch);
-                return pRec?.usableMeat && pRec.usableMeat !== "-" ? `${pRec.usableMeat} kg` : "N/A";
-              })()}
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="bg-secondary text-secondary-foreground border border-border px-4 py-2 rounded-sm font-bold text-xs uppercase tracking-tight flex flex-col justify-center">
+                <span className="text-[10px] text-muted-foreground opacity-70">Total Usable</span>
+                <span>{usableInitial} kg</span>
+              </div>
+              <div className={cn(
+                "px-4 py-2 rounded-sm border font-bold text-xs uppercase tracking-tight flex flex-col justify-center",
+                isOverLimit ? "bg-destructive/10 border-destructive text-destructive animate-pulse" : "bg-primary/10 border-primary text-primary"
+              )}>
+                <span className="text-[10px] opacity-70">{isOverLimit ? "Exceeded By" : "Remaining"}</span>
+                <span>{Math.abs(remainingMeat).toFixed(2)} kg</span>
+              </div>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -382,16 +399,23 @@ export default function Dressing() {
               </thead>
               <tbody>
                 {defaultPackaging.map((p, i) => (
-                  <tr key={i} className={`border-b ${i % 2 === 1 ? "bg-stripe" : ""}`}>
-                    <td className="px-4 py-3">{p.name}</td>
+                  <tr key={i} className={`border-b ${i % 2 === 1 ? "bg-stripe" : ""} ${p.name !== "Skin" && isOverLimit ? "bg-destructive/5" : ""}`}>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col">
+                        <span className="font-medium text-foreground">{p.name}</span>
+                        {p.name !== "Skin" && (
+                          <span className="text-[9px] text-muted-foreground uppercase">Reduces Usable Meat</span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-3">
                       <Input
                         type="number"
-                        className="w-20"
+                        className={cn("w-24", p.name !== "Skin" && isOverLimit && "border-destructive focus-visible:ring-destructive")}
                         value={pkgItems[i].qty || ""}
                         onChange={(e) => {
                           const next = [...pkgItems];
-                          next[i] = { ...next[i], qty: Number(e.target.value) || 0 };
+                          next[i] = { ...next[i], qty: Math.max(0, Number(e.target.value) || 0) };
                           setPkgItems(next);
                         }}
                       />
@@ -401,29 +425,52 @@ export default function Dressing() {
                         <span className="text-muted-foreground">₹</span>
                         <Input
                           type="number"
-                          className="w-20 inline-flex"
+                          className="w-24 inline-flex"
                           value={pkgItems[i].price || ""}
                           onChange={(e) => {
                             const next = [...pkgItems];
-                            next[i] = { ...next[i], price: Number(e.target.value) || 0 };
+                            next[i] = { ...next[i], price: Math.max(0, Number(e.target.value) || 0) };
                             setPkgItems(next);
                           }}
                         />
                       </div>
                     </td>
-                    <td className="px-4 py-3 font-medium">₹{pkgItems[i].qty * pkgItems[i].price}</td>
+                    <td className="px-4 py-3 font-medium text-foreground">₹{(pkgItems[i].qty * pkgItems[i].price).toLocaleString("en-IN")}</td>
                   </tr>
                 ))}
-                <tr className="border-t-2 font-bold">
-                  <td className="px-4 py-3" colSpan={3}>Grand Total</td>
-                  <td className="px-4 py-3">₹{grandTotal.toLocaleString("en-IN")}</td>
+                <tr className="border-t-2 border-primary/20 bg-primary/5 font-black text-foreground">
+                  <td className="px-4 py-4" colSpan={3}>GRAND TOTAL</td>
+                  <td className="px-4 py-4 text-primary text-base">₹{grandTotal.toLocaleString("en-IN")}</td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <div className="mt-6 flex gap-3">
-            <Button onClick={handleMoveToInventory} className="bg-primary hover:bg-primary/80 text-white">Move to Inventory</Button>
-            <Button variant="outline" onClick={handleSavePackaging} className="border-primary text-primary hover:bg-primary hover:text-white">Save Packaging</Button>
+          {isOverLimit && (
+            <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-sm flex items-center gap-2 text-destructive">
+              <span className="text-xs font-black uppercase tracking-tight">Validation Error:</span>
+              <span className="text-xs font-medium">Quantity exceeds available meat ({usedMeat.toFixed(2)} / {usableInitial.toFixed(2)} kg)</span>
+            </div>
+          )}
+
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button 
+              onClick={handleMoveToInventory} 
+              disabled={isOverLimit}
+              className="bg-primary hover:bg-primary/80 text-white disabled:opacity-50"
+            >
+              Move to Inventory
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={handleSavePackaging} 
+              disabled={isOverLimit}
+              className="border-primary text-primary hover:bg-primary hover:text-white disabled:opacity-50"
+            >
+              Save Packaging
+            </Button>
+            {isOverLimit && (
+              <span className="text-[10px] text-destructive font-bold uppercase self-center">Reduce quantities to enable actions</span>
+            )}
           </div>
         </div>
       )}
@@ -465,17 +512,29 @@ export default function Dressing() {
                 </div>
               </div>
 
-              {/* Packaging */}
-              <div className="border rounded-sm p-4 bg-muted/20">
-                <h3 className="font-medium mb-3">Packaging</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                  <div><Label>Bone (kg)</Label><Input type="number" value={editForm.pkgItems?.bone || ""} onChange={(e) => handleEditPkg("bone", e.target.value)} /></div>
-                  <div><Label>Boneless (kg)</Label><Input type="number" value={editForm.pkgItems?.boneless || ""} onChange={(e) => handleEditPkg("boneless", e.target.value)} /></div>
-                  <div><Label>Mixed (kg)</Label><Input type="number" value={editForm.pkgItems?.mixed || ""} onChange={(e) => handleEditPkg("mixed", e.target.value)} /></div>
-                  <div><Label>Skin (kg)</Label><Input type="number" value={editForm.pkgItems?.skin || ""} onChange={(e) => handleEditPkg("skin", e.target.value)} /></div>
-                  <div><Label>Meat (kg)</Label><Input type="number" value={editForm.pkgItems?.meat || ""} onChange={(e) => handleEditPkg("meat", e.target.value)} /></div>
-                </div>
-              </div>
+               {/* Packaging */}
+               <div className="border rounded-sm p-4 bg-muted/20">
+                 <div className="flex justify-between items-center mb-3">
+                   <h3 className="font-medium">Packaging</h3>
+                   {(() => {
+                     const u = Number(editForm.usableMeat) || 0;
+                     const m = (Number(editForm.pkgItems?.bone) || 0) + (Number(editForm.pkgItems?.boneless) || 0) + (Number(editForm.pkgItems?.mixed) || 0) + (Number(editForm.pkgItems?.meat) || 0);
+                     const ov = m > u;
+                     return (
+                       <span className={cn("text-[10px] font-black uppercase px-2 py-0.5 rounded border", ov ? "bg-destructive/10 border-destructive text-destructive" : "bg-primary/10 border-primary text-primary")}>
+                         {ov ? `Exceeded by ${(m-u).toFixed(2)} kg` : `Remaining: ${(u-m).toFixed(2)} kg`}
+                       </span>
+                     );
+                   })()}
+                 </div>
+                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                   <div><Label>Bone (kg)</Label><Input type="number" value={editForm.pkgItems?.bone || ""} onChange={(e) => handleEditPkg("bone", e.target.value)} /></div>
+                   <div><Label>Boneless (kg)</Label><Input type="number" value={editForm.pkgItems?.boneless || ""} onChange={(e) => handleEditPkg("boneless", e.target.value)} /></div>
+                   <div><Label>Mixed (kg)</Label><Input type="number" value={editForm.pkgItems?.mixed || ""} onChange={(e) => handleEditPkg("mixed", e.target.value)} /></div>
+                   <div><Label>Skin (kg)</Label><Input type="number" value={editForm.pkgItems?.skin || ""} onChange={(e) => handleEditPkg("skin", e.target.value)} /></div>
+                   <div><Label>Meat (kg)</Label><Input type="number" value={editForm.pkgItems?.meat || ""} onChange={(e) => handleEditPkg("meat", e.target.value)} /></div>
+                 </div>
+               </div>
 
               <div className="flex items-center gap-3 mt-4">
                 <Label>Status:</Label>
@@ -486,12 +545,22 @@ export default function Dressing() {
                 </select>
               </div>
 
+              <DialogFooter className="mt-8 border-t pt-6">
+                <Button variant="outline" onClick={() => { setEditingBatch(null); setEditingId(null); }}>Cancel</Button>
+                <Button 
+                  className="bg-primary hover:bg-primary/80" 
+                  onClick={handleEditSave}
+                  disabled={(() => {
+                    const u = Number(editForm.usableMeat) || 0;
+                    const m = (Number(editForm.pkgItems?.bone) || 0) + (Number(editForm.pkgItems?.boneless) || 0) + (Number(editForm.pkgItems?.mixed) || 0) + (Number(editForm.pkgItems?.meat) || 0);
+                    return m > u;
+                  })()}
+                >
+                  Save Changes
+                </Button>
+              </DialogFooter>
             </div>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setEditingBatch(null); setEditingId(null); }}>Cancel</Button>
-            <Button className="bg-primary hover:bg-primary/80" onClick={handleEditSave}>Save Changes</Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 

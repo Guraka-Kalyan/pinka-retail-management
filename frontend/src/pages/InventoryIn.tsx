@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { IndianRupee, Bone, AlertTriangle, Package, Pencil, Trash2, Loader2 } from "lucide-react";
+import { IndianRupee, Bone, AlertTriangle, Package, Pencil, Trash2, Loader2, X } from "lucide-react";
 import api from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 interface InventoryRecord {
   id?: string;
@@ -38,13 +39,27 @@ export default function InventoryIn() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [records, setRecords] = useState<InventoryRecord[]>([]);
+  const [preps, setPreps] = useState<any[]>([]);
+  const [sales, setSales] = useState<any[]>([]);
 
   const fetchData = async () => {
     try {
       setIsLoading(true);
       const endpoint = isWarehouse ? "/central-inventory" : `/shops/${id}/inventory-in`;
-      const res = await api.get(endpoint);
-      setRecords(res.data.data || []);
+      
+      if (!isWarehouse) {
+        const [invRes, prepRes, salesRes] = await Promise.all([
+          api.get(endpoint),
+          api.get(`/shops/${id}/preparations`),
+          api.get(`/shops/${id}/sales`)
+        ]);
+        setRecords(invRes.data.data || []);
+        setPreps(prepRes.data.data || []);
+        setSales(salesRes.data.data || []);
+      } else {
+        const res = await api.get(endpoint);
+        setRecords(res.data.data || []);
+      }
     } catch (err) {
       console.error(err);
       toast({ title: "Error", description: "Failed to fetch inventory data.", variant: "destructive" });
@@ -145,11 +160,51 @@ export default function InventoryIn() {
     }
   };
 
+  // ── Usage Calculation Logic (FIFO) ─────────────────────────────────────────
+  const getBatchUsage = (batchId: string | undefined, type: 'bone' | 'boneless') => {
+    if (isWarehouse || !batchId) return 0;
+    
+    // 1. Calculate total consumption for the shop
+    const totalConsumption = type === 'bone' 
+      ? preps.reduce((s, r) => s + (Number(r.boneUsed) || 0), 0) + sales.reduce((s, r) => s + (Number(r.boneSold) || 0), 0)
+      : preps.reduce((s, r) => s + (Number(r.bonelessUsed) || 0), 0) + sales.reduce((s, r) => s + (Number(r.bonelessSold) || 0), 0);
+
+    // 2. Sort batches by date to apply FIFO
+    const sortedBatches = [...records].sort((a, b) => {
+        const d_a = a.date || a.createdAt || "";
+        const d_b = b.date || b.createdAt || "";
+        return d_a.localeCompare(d_b);
+    });
+
+    let consumedPool = totalConsumption;
+    let batchUsed = 0;
+
+    for (const b of sortedBatches) {
+        const bId = b._id || b.id;
+        const bQty = Number(type === 'bone' ? b.bone : b.boneless) || 0;
+        
+        // How much of the remaining consumedPool can we take from this batch?
+        const canTake = Math.min(bQty, consumedPool);
+        
+        if (bId === batchId) {
+            batchUsed = canTake;
+            break;
+        }
+        
+        consumedPool -= canTake;
+        if (consumedPool <= 0) break;
+    }
+    
+    return batchUsed;
+  };
+
   // Editing
   const [editingIndex, setEditingIndex] = useState<string | null>(null);
+  const [usedInfo, setUsedInfo] = useState({ bone: 0, boneless: 0 });
 
   const handleEditClick = (record: InventoryRecord) => {
-    setEditingIndex(record._id || record.id || null);
+    const id = record._id || record.id || null;
+    setEditingIndex(id);
     setBatch(record.batch || record.batchNo || "");
     setDate(record.date || record.createdAt?.split("T")[0] || "");
     setTransport(record.transport);
@@ -160,11 +215,35 @@ export default function InventoryIn() {
     setMeat((record.meat || 0).toString());
     setRate((record.rate || 0).toString());
     setTotalWeight((record.total_weight || record.totalWeight || 0).toString());
+    
+    if (!isWarehouse && id) {
+        setUsedInfo({
+            bone: getBatchUsage(id, 'bone'),
+            boneless: getBatchUsage(id, 'boneless')
+        });
+    }
+    
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleUpdate = async () => {
     if (!editingIndex) return;
+    
+    const nBone = Number(bone) || 0;
+    const nBoneless = Number(boneless) || 0;
+
+    // VALIDATION RULE: Cannot reduce below used quantity
+    if (!isWarehouse) {
+        if (nBone < usedInfo.bone || nBoneless < usedInfo.boneless) {
+            toast({ 
+                title: "Validation Blocked", 
+                description: `Cannot reduce below used quantity. Bone used: ${usedInfo.bone}kg, Boneless used: ${usedInfo.boneless}kg`, 
+                variant: "destructive" 
+            });
+            return;
+        }
+    }
+
     const enteredTotalWeight = isWarehouse ? (Number(totalWeight) || 0) : totalKgCalculated;
     if (isWarehouse && enteredTotalWeight !== totalKgCalculated) {
       toast({ 
@@ -299,8 +378,46 @@ export default function InventoryIn() {
               </div>
             </>
           )}
+          {editingIndex && !isWarehouse && (
+            <div className="col-span-full bg-primary/5 border border-primary/20 p-4 rounded-sm mb-2">
+              <div className="flex flex-wrap justify-between items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-bold uppercase text-primary">Batch Usage Summary ({batch})</span>
+                </div>
+                <div className="flex gap-6 text-sm">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] text-muted-foreground uppercase font-black">Consumed (Bone)</span>
+                    <span className="font-bold text-foreground">{usedInfo.bone} kg</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] text-muted-foreground uppercase font-black">Remaining (Post-Edit)</span>
+                    <span className={cn("font-bold", ((Number(bone) || 0) - usedInfo.bone) < 0 ? "text-destructive" : "text-green-600")}>
+                        {(Number(bone) || 0) - usedInfo.bone} kg
+                    </span>
+                  </div>
+                  <div className="w-px h-8 bg-zinc-200 self-center hidden sm:block"></div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] text-muted-foreground uppercase font-black">Consumed (Boneless)</span>
+                    <span className="font-bold text-foreground">{usedInfo.boneless} kg</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] text-muted-foreground uppercase font-black">Remaining (Post-Edit)</span>
+                    <span className={cn("font-bold", (Number(boneless) || 0) - usedInfo.boneless < 0 ? "text-destructive" : "text-green-600")}>
+                        {(Number(boneless) || 0) - usedInfo.boneless} kg
+                    </span>
+                  </div>
+                </div>
+              </div>
+              {(Number(bone) || 0) < usedInfo.bone || (Number(boneless) || 0) < usedInfo.boneless ? (
+                <div className="mt-3 text-[11px] font-black uppercase text-destructive flex items-center gap-1">
+                   <X className="h-3 w-3" /> Error: New quantity must be greater or equal to consumed weight
+                </div>
+              ) : null}
+            </div>
+          )}
+
           <div className="flex flex-col justify-end gap-2">
-            {/* Skin and Meat calculated fields have been removed per requirement */}
             {!isWarehouse && (
               <div className="bg-secondary/30 p-2 rounded-sm flex justify-between items-center px-3 border border-dashed text-sm">
                 <span className="text-muted-foreground font-medium">Total Amount:</span>
@@ -309,7 +426,11 @@ export default function InventoryIn() {
             )}
             {editingIndex !== null ? (
               <div className="flex gap-2 w-full">
-                <Button onClick={handleUpdate} className="flex-1 bg-green-600 hover:bg-green-700 text-white">
+                <Button 
+                  onClick={handleUpdate} 
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
+                  disabled={(Number(bone) || 0) < usedInfo.bone || (Number(boneless) || 0) < usedInfo.boneless}
+                >
                   Update Entry
                 </Button>
                 <Button onClick={cancelEdit} variant="outline" className="flex-1">

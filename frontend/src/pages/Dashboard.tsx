@@ -24,7 +24,10 @@ const C_PURPLE  = "#9333EA";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const rupee = (n: number) => `₹${Math.round(Math.abs(n)).toLocaleString("en-IN")}`;
-const numWeight = (v: any): number => (typeof v === "number" ? v : 0);
+const numWeight = (v: any): number => {
+  const n = Number(v);
+  return isNaN(n) ? 0 : n;
+};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ShopRec   { _id: string; name: string; }
@@ -122,9 +125,9 @@ const GenTooltip = ({ active, payload, label }: any) => {
 };
 
 // ── Section wrapper ───────────────────────────────────────────────────────────
-const Section = ({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) => (
-  <div className="rounded-sm border border-border bg-card shadow-none overflow-hidden">
-    <div className="border-l-4 border-l-[#FF6B00] px-5 py-3 bg-card">
+const Section = ({ title, subtitle, children, className }: { title: string; subtitle?: string; children: React.ReactNode; className?: string }) => (
+  <div className={cn("rounded-sm border border-border bg-card shadow-none overflow-hidden", className)}>
+    <div className="border-l-4 border-l-[#FF6B00] px-5 py-3 bg-card border-b border-border/50">
       <span className="text-xs font-black tracking-widest uppercase" style={{ color: C_PRIMARY }}>{title}</span>
       {subtitle && <p className="text-[10px] text-muted-foreground mt-0.5">{subtitle}</p>}
     </div>
@@ -135,10 +138,10 @@ const Section = ({ title, subtitle, children }: { title: string; subtitle?: stri
 const KpiCard = ({
   label, value, sub, color = "var(--text-primary)", bg,
 }: { label: string; value: string; sub?: string; color?: string; bg?: string; }) => (
-  <div className={cn("rounded-sm border border-border p-4", bg || "bg-background")}>
+  <div className={cn("rounded-sm border border-border p-4 transition-all hover:border-primary/50", bg || "bg-background")}>
     <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">{label}</p>
     <p className="text-2xl font-black" style={{ color }}>{value}</p>
-    {sub && <p className="text-[10px] text-muted-foreground mt-1">{sub}</p>}
+    {sub && <p className="text-[10px] text-muted-foreground mt-1 truncate">{sub}</p>}
   </div>
 );
 
@@ -169,62 +172,60 @@ export default function Dashboard() {
   const [invIn,    setInvIn]    = useState<InvInRec[]>([]);
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    (async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  const fetchAllData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const params = timeframe === "Custom" ? { from: customStart, to: customEnd } : {};
 
-        const [shopsR, notesR, suppliesR, batchesR] = await Promise.all([
-          api.get("/shops"),
-          api.get("/shops/notes/all"),
-          api.get("/supplies"),
-          api.get("/batches"),
-        ]);
+      const [shopsR, notesR, suppliesR, batchesR] = await Promise.all([
+        api.get("/shops"),
+        api.get("/shops/notes/all"),
+        api.get("/supplies", { params }),
+        api.get("/batches", { params }),
+      ]);
 
-        const shopList: ShopRec[] = shopsR.data.data || [];
-        setShops(shopList);
-        setNotes(notesR.data.data || []);
-        setSupplies(suppliesR.data.data || []);
-        setBatches(batchesR.data.data || []);
+      const shopList: ShopRec[] = shopsR.data.data || [];
+      setShops(shopList);
+      setNotes(notesR.data.data || []);
+      setSupplies(suppliesR.data.data || []);
+      setBatches(batchesR.data.data || []);
 
-        // Log API samples as required
-        console.log("[Dashboard] /api/supplies sample:", (suppliesR.data.data || [])[0]);
-        console.log("[Dashboard] /api/batches  sample:", (batchesR.data.data  || [])[0]);
-
-        const perShop = await Promise.all(
-          shopList.map(s =>
-            Promise.all([
-              api.get(`/shops/${s._id}/sales`),
-              api.get(`/shops/${s._id}/daily-costs`),
-              api.get(`/shops/${s._id}/inventory-in`),
-            ]).then(([sR, cR, iR]) => ({
+      const perShop = await Promise.all(
+        shopList.map(async (s) => {
+          try {
+            const [sR, cR, iR] = await Promise.all([
+              api.get(`/shops/${s._id}/sales`, { params }),
+              api.get(`/shops/${s._id}/daily-costs`, { params }),
+              api.get(`/shops/${s._id}/inventory-in`, { params }),
+            ]);
+            return {
               shopId: s._id,
-              sales:  sR.data.data || [],
-              costs:  cR.data.data || [],
-              invIn:  iR.data.data || [],
-            }))
-          )
-        );
+              sales: sR.data.data || [],
+              costs: cR.data.data || [],
+              invIn: iR.data.data || [],
+            };
+          } catch (err) {
+            console.error(`Failed to fetch data for shop ${s.name}:`, err);
+            return { shopId: s._id, sales: [], costs: [], invIn: [] };
+          }
+        })
+      );
 
-        const allSales  = perShop.flatMap(r => r.sales.map((s: any)  => ({ ...s, shopId: r.shopId })));
-        const allCosts  = perShop.flatMap(r => r.costs.map((c: any)  => ({ ...c, shopId: r.shopId })));
-        const allInvIn  = perShop.flatMap(r => r.invIn.map((i: any)  => ({ ...i, shopId: r.shopId })));
+      setSales(perShop.flatMap(r => r.sales.map((s: any) => ({ ...s, shopId: r.shopId }))));
+      setCosts(perShop.flatMap(r => r.costs.map((c: any) => ({ ...c, shopId: r.shopId }))));
+      setInvIn(perShop.flatMap(r => r.invIn.map((i: any) => ({ ...i, shopId: r.shopId }))));
 
-        console.log("[Dashboard] sales  sample:", allSales[0]);
-        console.log("[Dashboard] costs  sample:", allCosts[0]);
-        console.log("[Dashboard] invIn  sample:", allInvIn[0]);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to load dashboard data.");
+    } finally {
+      setLoading(false);
+    }
+  }, [timeframe, customStart, customEnd]);
 
-        setSales(allSales);
-        setCosts(allCosts);
-        setInvIn(allInvIn);
-      } catch (e: any) {
-        setError(e?.response?.data?.message || "Failed to load dashboard data.");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+  useEffect(() => {
+    fetchAllData();
+  }, [timeframe, customStart, customEnd]); // Re-fetch only on legitimate range changes
 
   // ── Date range ────────────────────────────────────────────────────────────
   const dateRange = useMemo(() => {
@@ -246,25 +247,27 @@ export default function Dashboard() {
 
   // ── SECTION 1 — Cost to Revenue Pipeline ──────────────────────────────────
   const pipeline = useMemo(() => {
-    const rawCost      = fBatches.reduce((a, b) => a + (b.cost || 0), 0);
-    const extSupply    = fSupplies.filter(s => !s.shopId && s.externalRecipient?.name).reduce((a, s) => a + (s.totalAmount || 0), 0);
-    const opCost       = fCosts.reduce((a, c) => a + (c.total || 0), 0);
-    const discount     = fSales.reduce((a, s) => a + (s.discountGiven || 0), 0);
-    const selling      = fSales.reduce((a, s) => a + (s.total        || 0), 0);
-    const netProfit    = selling - (rawCost + extSupply + opCost + discount);
-    const combinedExp  = extSupply + opCost + discount;
+    const totalSales   = fSales.reduce((a, s) => a + (s.total || 0), 0);
+    const totalInvIn   = fInvIn.reduce((a, i) => a + (i.totalAmount || 0), 0);
+    const totalOpCost  = fCosts.reduce((a, c) => a + (c.total || 0), 0);
+    const totalDisc    = fSales.reduce((a, s) => a + (s.discountGiven || 0), 0);
+    const supplyCost   = fSupplies.reduce((a, s) => a + (numWeight(s.extra)), 0);
+
+    const totalCost    = totalInvIn + supplyCost + totalOpCost + totalDisc;
+    const netProfit    = totalSales - totalCost;
+    const combinedExp  = supplyCost + totalOpCost + totalDisc;
 
     const waterfall = [
-      { name: "Raw Cost",    value: rawCost,   type: "cost",                          fullLabel: "Total Raw Cost" },
-      { name: "Supply",      value: extSupply, type: "cost",                          fullLabel: "External Supply" },
-      { name: "Operational", value: opCost,    type: "cost",                          fullLabel: "Operational Cost" },
-      { name: "Discount",    value: discount,  type: "cost",                          fullLabel: "Discount Given" },
-      { name: "Selling Price", value: selling, type: "revenue",                       fullLabel: "Total Sales Revenue" },
-      { name: "Profit",        value: netProfit, type: netProfit >= 0 ? "profit" : "loss", fullLabel: "Net Profit / Loss" },
+      { name: "Inventory In", value: totalInvIn, type: "cost",    fullLabel: "Inventory In (Cost Base)" },
+      { name: "Supply",       value: supplyCost, type: "cost",    fullLabel: "Supply (Inventory Out Extra)" },
+      { name: "Operational",  value: totalOpCost, type: "cost",    fullLabel: "Operational Cost" },
+      { name: "Discount",     value: totalDisc,   type: "cost",    fullLabel: "Discount Given" },
+      { name: "Selling Price",value: totalSales,  type: "revenue", fullLabel: "Selling Price (Revenue)" },
+      { name: "Business Profit", value: netProfit, type: netProfit >= 0 ? "profit" : "loss", fullLabel: "Net Business Profit (Incl. Supply)" },
     ];
 
-    return { rawCost, combinedExp, selling, netProfit, waterfall };
-  }, [fBatches, fSupplies, fCosts, fSales]);
+    return { totalInvIn, supplyCost, totalSales, netProfit, combinedExp, waterfall };
+  }, [fSales, fInvIn, fCosts, fSupplies]);
 
   // ── SECTION 2 — Dressing ──────────────────────────────────────────────────
   const dressing = useMemo(() => {
@@ -319,64 +322,71 @@ export default function Dashboard() {
 
   // ── SECTION 3 — Supply ────────────────────────────────────────────────────
   const supplyData = useMemo(() => {
-    const shopSups  = fSupplies.filter(s => !!s.shopId);
-    const otherSups = fSupplies.filter(s => !s.shopId && s.externalRecipient?.name);
+    const shopSups    = fSupplies.filter(s => !!s.shopId);
+    const otherSups   = fSupplies.filter(s => !s.shopId);
 
-    const shopValue  = shopSups.reduce((a, s)  => a + (s.totalAmount || 0), 0);
-    const otherValue = otherSups.reduce((a, s) => a + (s.totalAmount || 0), 0);
-    const shopKg     = shopSups.reduce((a, s)  => a + (s.total       || 0), 0);
-    const otherKg    = otherSups.reduce((a, s) => a + (s.total       || 0), 0);
+    const shopValue   = shopSups.reduce((a, s) => a + (s.totalAmount || 0), 0);
+    const otherValue  = otherSups.reduce((a, s) => a + (s.totalAmount || 0), 0);
+    const shopKg      = shopSups.reduce((a, s) => a + (s.total || 0), 0);
+    const otherKg     = otherSups.reduce((a, s) => a + (s.total || 0), 0);
+    const supplyExtra = fSupplies.reduce((a, s) => a + (numWeight(s.extra)), 0);
+    
     const totalInvSales = shopValue + otherValue;
-    const diffPct    = otherValue > 0 ? Math.round((shopValue / otherValue - 1) * 100) : 100;
+    const diffPct       = otherValue > 0 ? Math.round((shopValue / otherValue - 1) * 100) : 100;
 
-    // Per-batch line chart
-    const batchMap: Record<string, { name: string; shopKg: number; otherKg: number }> = {};
-    batches.forEach(b => { batchMap[b.batchNo] = { name: b.batchNo, shopKg: 0, otherKg: 0 }; });
+    // Per-batch line chart (kg)
+    const batchMap: Record<string, { name: string; shopKg: number; otherKg: number; extra: number }> = {};
     fSupplies.forEach(s => {
-      if (!batchMap[s.batch]) batchMap[s.batch] = { name: s.batch, shopKg: 0, otherKg: 0 };
-      if (s.shopId) batchMap[s.batch].shopKg     += (s.total || 0);
-      else          batchMap[s.batch].otherKg    += (s.total || 0);
+      const bkey = s.batch || "Unbatched";
+      if (!batchMap[bkey]) batchMap[bkey] = { name: bkey, shopKg: 0, otherKg: 0, extra: 0 };
+      if (s.shopId) batchMap[bkey].shopKg += (s.total || 0);
+      else          batchMap[bkey].otherKg += (s.total || 0);
+      batchMap[bkey].extra += numWeight(s.extra);
     });
     const lineData = Object.values(batchMap).filter(d => d.shopKg > 0 || d.otherKg > 0);
 
-    return { shopValue, otherValue, shopKg, otherKg, totalInvSales, diffPct, lineData };
-  }, [fSupplies, batches]);
+    return { shopValue, otherValue, shopKg, otherKg, totalInvSales, diffPct, lineData, supplyExtra };
+  }, [fSupplies]);
 
-  // ── SECTION 4 — Shop Sales per batch ─────────────────────────────────────
   const shopSalesData = useMemo(() => {
-    // BatchNo → shopIds that received it this period
+    const batchMap: Record<string, {
+      name: string; inventoryIn: number; salesValue: number;
+      discount: number; opCost: number; shopProfit: number;
+    }> = {};
+
+    // 1. Accumulate Inventory In per batch
+    fInvIn.forEach(i => {
+      if (!batchMap[i.batch]) batchMap[i.batch] = { name: i.batch, inventoryIn: 0, salesValue: 0, discount: 0, opCost: 0, shopProfit: 0 };
+      batchMap[i.batch].inventoryIn += (i.totalAmount || 0);
+    });
+
+    // 2. Identify shops per batch to attribute Sales/Costs
     const batchShops: Record<string, Set<string>> = {};
     fInvIn.forEach(i => {
       if (!batchShops[i.batch]) batchShops[i.batch] = new Set();
       batchShops[i.batch].add(i.shopId);
     });
 
-    const batchMap: Record<string, {
-      name: string; inventoryIn: number; salesValue: number;
-      discount: number; opCost: number; shopProfit: number;
-    }> = {};
-
-    batches.forEach(b => {
-      batchMap[b.batchNo] = { name: b.batchNo, inventoryIn: 0, salesValue: 0, discount: 0, opCost: 0, shopProfit: 0 };
-    });
-    fInvIn.forEach(i => {
-      if (!batchMap[i.batch]) batchMap[i.batch] = { name: i.batch, inventoryIn: 0, salesValue: 0, discount: 0, opCost: 0, shopProfit: 0 };
-      batchMap[i.batch].inventoryIn += (i.totalAmount || 0);
-    });
+    // 3. Aggregate Sales/Costs per batch via attributed shops
     Object.keys(batchShops).forEach(batchNo => {
-      const ids = batchShops[batchNo];
-      const bs  = fSales.filter(s => ids.has(s.shopId));
-      const bc  = fCosts.filter(c => ids.has(c.shopId));
-      if (!batchMap[batchNo]) batchMap[batchNo] = { name: batchNo, inventoryIn: 0, salesValue: 0, discount: 0, opCost: 0, shopProfit: 0 };
-      batchMap[batchNo].salesValue = bs.reduce((a, s) => a + (s.total         || 0), 0);
-      batchMap[batchNo].discount   = bs.reduce((a, s) => a + (s.discountGiven || 0), 0);
-      batchMap[batchNo].opCost     = bc.reduce((a, c) => a + (c.total         || 0), 0);
-      batchMap[batchNo].shopProfit =
-        batchMap[batchNo].salesValue - batchMap[batchNo].inventoryIn -
-        batchMap[batchNo].opCost - batchMap[batchNo].discount;
+      const shopIds = batchShops[batchNo];
+      const batchSales = fSales.filter(s => shopIds.has(s.shopId));
+      const batchCosts = fCosts.filter(c => shopIds.has(c.shopId));
+      
+      const salesVal = batchSales.reduce((a, s) => a + (s.total || 0), 0);
+      const discVal  = batchSales.reduce((a, s) => a + (s.discountGiven || 0), 0);
+      const opVal    = batchCosts.reduce((a, c) => a + (c.total || 0), 0);
+      const invVal   = batchMap[batchNo].inventoryIn;
+
+      batchMap[batchNo].salesValue = salesVal;
+      batchMap[batchNo].discount   = discVal;
+      batchMap[batchNo].opCost     = opVal;
+      // shop_profit = sales - (inventoryIn + operational + discount)
+      batchMap[batchNo].shopProfit = salesVal - (invVal + opVal + discVal);
     });
+
     return Object.values(batchMap).filter(b => b.inventoryIn > 0 || b.salesValue > 0);
-  }, [batches, fInvIn, fSales, fCosts]);
+  }, [fInvIn, fSales, fCosts]);
 
   // ── Notes grouped ─────────────────────────────────────────────────────────
   const notesList = useMemo(() => notes.map(n => ({
@@ -452,43 +462,44 @@ export default function Dashboard() {
       ════════════════════════════════════════════════════════════════════════ */}
       <Section
         title="Cost to Revenue Pipeline"
-        subtitle="Per-batch average breakdown: Raw → Processing → Packaging → Supply → Operational → Discount → Selling Price → Profit"
+        subtitle="Global aggregation across all shops: Inv In → Overheads → Revenue → Business Profit"
       >
-        {/* 4 KPI mini-cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-          <KpiCard label="Total Raw Cost"                   value={rupee(rawCost)}     color={C_RED} />
-          <KpiCard label="Discount + Operational Costs + Supply" value={rupee(combinedExp)} />
-          <KpiCard label="Total Sales Revenue"              value={rupee(selling)}     color={C_BLUE} />
+        {/* 4 KPI cards as per requirements */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <KpiCard label="Inventory In Value" value={rupee(pipeline.totalInvIn)} sub="Cost of meat supplied" />
+          <KpiCard label="Combined Overheads" value={rupee(pipeline.combinedExp)} sub="Supply + Operational + Discount" />
+          <KpiCard label="Total Sales Revenue" value={rupee(pipeline.totalSales)} color={C_BLUE} sub="Aggregated across all shops" />
           <KpiCard
-            label="Net Profit / Loss"
-            value={`${netProfit < 0 ? "−" : "+"}${rupee(netProfit)}`}
-            color={netProfit >= 0 ? C_GREEN : C_RED}
+            label="Net Business Profit"
+            value={`${pipeline.netProfit < 0 ? "−" : "+"}${rupee(pipeline.netProfit)}`}
+            color={pipeline.netProfit >= 0 ? C_GREEN : C_RED}
+            bg={pipeline.netProfit >= 0 ? "bg-green-50/50" : "bg-red-50/50"}
+            sub="Incl. Supply (Extra)"
           />
         </div>
 
-        {/* Legend */}
-        <div className="flex items-center gap-4 mb-3 text-xs font-bold">
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: C_RED }} /> Costs</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: C_BLUE }} /> Revenue</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: C_GREEN }} /> Profit</span>
+        <div className="flex items-center gap-4 mb-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: C_RED }} /> Costs</span>
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: C_BLUE }} /> Revenue</span>
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: C_GREEN }} /> Profit</span>
         </div>
 
         {/* Waterfall bar chart */}
-        <div style={{ height: 300 }}>
-          {waterfall.every(d => d.value === 0)
+        <div style={{ height: 320 }}>
+          {pipeline.waterfall.every(d => d.value === 0)
             ? <EmptyChart />
             : (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={waterfall} margin={{ top: 28, right: 16, left: 10, bottom: 5 }}>
+                <BarChart data={pipeline.waterfall} margin={{ top: 30, right: 20, left: 20, bottom: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "var(--chart-text)" }} />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: "var(--chart-text)" }} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--chart-text)" }} tickFormatter={v => `₹${(v / 1000).toFixed(0)}K`} />
-                  <RechartsTooltip content={<WfTooltip />} cursor={{ fill: "var(--chart-bg)" }} />
-                  <Bar dataKey="value" maxBarSize={70} radius={[2, 2, 0, 0]}>
-                    <LabelList dataKey="value" position="top" fontSize={10} fill="var(--chart-text)"
-                      formatter={(v: number) => v > 0 ? `₹${Math.round(v).toLocaleString("en-IN")}` : v < 0 ? `−₹${Math.round(Math.abs(v)).toLocaleString("en-IN")}` : ""}
+                  <RechartsTooltip content={<WfTooltip />} cursor={{ fill: "rgba(0,0,0,0.05)" }} />
+                  <Bar dataKey="value" maxBarSize={60} radius={[2, 2, 0, 0]}>
+                    <LabelList dataKey="value" position="top" fontSize={10} fontWeight={800} fill="var(--chart-text)"
+                      formatter={(v: number) => v === 0 ? "" : `₹${Math.round(v).toLocaleString("en-IN")}`}
                     />
-                    {waterfall.map((d, i) => (
+                    {pipeline.waterfall.map((d, i) => (
                       <Cell key={i} fill={d.type === "revenue" ? C_BLUE : d.type === "profit" ? C_GREEN : d.type === "loss" ? C_RED : C_RED} />
                     ))}
                   </Bar>
@@ -574,53 +585,48 @@ export default function Dashboard() {
       {/* ════════════════════════════════════════════════════════════════════════
           SECTION 3 — SUPPLY
       ════════════════════════════════════════════════════════════════════════ */}
-      <Section title="Supply" subtitle="Shop Supply vs Other Supply">
+      <Section title="Supply" subtitle="Global supply distribution and extra processing costs">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
           {/* Left: KPI column */}
           <div className="flex flex-col gap-3">
-            <div className="rounded-sm border border-border p-4 bg-background">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Total Inventory Sales</p>
-              <p className="text-2xl font-black text-foreground">{rupee(totalInvSales)}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Shop + Others</p>
-            </div>
-            <div className="rounded-sm border border-border p-4" style={{ backgroundColor: "#F0FDF4" }}>
+            <KpiCard label="Total Inventory Sales" value={rupee(totalInvSales)} sub="Shop + External Recipient" />
+            <div className="rounded-sm border border-border p-4 transition-all bg-green-50/30">
               <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Shop Supply</p>
-              <p className="text-2xl font-black" style={{ color: C_GREEN }}>{rupee(shopValue)}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">{shopKg.toLocaleString("en-IN")} kg</p>
+              <p className="text-2xl font-black text-green-700">{rupee(shopValue)}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5 font-bold tracking-tight">{shopKg.toLocaleString("en-IN")} kg shipped</p>
             </div>
-            <div className="rounded-sm border border-border p-4" style={{ backgroundColor: "#FFFBEB" }}>
+            <div className="rounded-sm border border-border p-4 transition-all bg-blue-50/30">
               <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Other Supply</p>
-              <p className="text-2xl font-black" style={{ color: C_ORANGE }}>{rupee(otherValue)}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">{otherKg.toLocaleString("en-IN")} kg</p>
+              <p className="text-2xl font-black text-blue-700">{rupee(otherValue)}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5 font-bold tracking-tight">{otherKg.toLocaleString("en-IN")} kg shipped</p>
             </div>
-            {shopValue > 0 && otherValue > 0 && (
-              <div className="rounded-sm border border-border p-3 bg-primary/5 text-xs font-bold text-primary">
-                {shopValue >= otherValue
-                  ? `Shop supply higher by ${diffPct}%`
-                  : `Other supply higher by ${Math.round((otherValue / shopValue - 1) * 100)}%`
-                }
-              </div>
-            )}
+            <div className="rounded-sm border border-border p-4 transition-all bg-orange-50/30">
+               <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Supply Cost (Extra)</p>
+               <p className="text-2xl font-black text-orange-700">{rupee(supplyData.supplyExtra)}</p>
+               <p className="text-[10px] text-muted-foreground mt-0.5 font-bold tracking-tight">Source: Inventory Out Extra</p>
+            </div>
           </div>
 
           {/* Right: Line chart shop vs other supply per batch */}
-          <div className="lg:col-span-2">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Shop vs Other Supply (kg)</p>
-            <div style={{ height: 280 }}>
+          <div className="lg:col-span-2 bg-background/30 p-4 rounded-sm border border-border/50">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-4">Supply Weights & Extra Costs per Batch</p>
+            <div style={{ height: 300 }}>
               {supplyData.lineData.length === 0
                 ? <EmptyChart />
                 : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={supplyData.lineData} margin={{ top: 10, right: 16, left: 0, bottom: 5 }}>
+                    <ComposedChart data={supplyData.lineData} margin={{ top: 10, right: 16, left: 0, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
                       <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--chart-text)" }} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--chart-text)" }} />
+                      <YAxis yAxisId="kg" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--chart-text)" }} />
+                      <YAxis yAxisId="inr" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--chart-text)" }} tickFormatter={v => `₹${v/1000}k`} />
                       <RechartsTooltip content={<GenTooltip />} />
-                      <Legend wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />
-                      <Line type="monotone" dataKey="shopKg"  name="Shop Supply (kg)"  stroke={C_GREEN}  strokeWidth={2} dot={{ r: 3, fill: C_GREEN }} />
-                      <Line type="monotone" dataKey="otherKg" name="Other Supply (kg)" stroke={C_BLUE}   strokeWidth={2} dot={{ r: 3, fill: C_BLUE }}  />
-                    </LineChart>
+                      <Legend wrapperStyle={{ fontSize: 10, paddingTop: 10 }} />
+                      <Bar yAxisId="kg" type="monotone" dataKey="shopKg"  name="Shop Supply (kg)"  fill={C_GREEN} radius={[2, 2, 0, 0]} maxBarSize={30} />
+                      <Bar yAxisId="kg" type="monotone" dataKey="otherKg" name="Other Supply (kg)" fill={C_BLUE} radius={[2, 2, 0, 0]} maxBarSize={30} />
+                      <Line yAxisId="inr" type="monotone" dataKey="extra" name="Extra Cost (₹)" stroke={C_ORANGE} strokeWidth={3} dot={{ r: 4, fill: "#fff", strokeWidth: 2 }} />
+                    </ComposedChart>
                   </ResponsiveContainer>
                 )
               }
@@ -663,8 +669,8 @@ export default function Dashboard() {
               </div>
 
               {/* Right: Profit / Loss bar + trend line */}
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Profit / Loss per Batch</p>
+              <div className="bg-background/30 p-4 rounded-sm border border-border/50">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-4 font-black">Shop Profit (Excl. Supply)</p>
                 <div style={{ height: 300 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={shopSalesData} margin={{ top: 10, right: 16, left: 0, bottom: 5 }}>
@@ -672,17 +678,18 @@ export default function Dashboard() {
                       <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--chart-text)" }} />
                       <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--chart-text)" }} tickFormatter={v => `₹${(v / 1000).toFixed(0)}K`} />
                       <RechartsTooltip content={<GenTooltip />} />
-                      <Legend wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />
+                      <Legend wrapperStyle={{ fontSize: 10, paddingTop: 10 }} />
                       <ReferenceLine y={0} stroke="var(--border)" strokeWidth={2} />
-                      <Bar dataKey="shopProfit" name="Profit/Loss (₹)" maxBarSize={40} radius={[2, 2, 0, 0]}>
+                      <Bar dataKey="shopProfit" name="Shop Profit/Loss (₹)" maxBarSize={40} radius={[2, 2, 0, 0]}>
                         {shopSalesData.map((d, i) => (
                           <Cell key={i} fill={d.shopProfit >= 0 ? C_GREEN : C_RED} />
                         ))}
                       </Bar>
-                      <Line type="monotone" dataKey="shopProfit" name="Trend" stroke={C_ORANGE} strokeWidth={2} dot={{ r: 3, fill: C_ORANGE }} activeDot={{ r: 5 }} />
+                      <Line type="monotone" dataKey="shopProfit" name="Trend" stroke={C_ORANGE} strokeWidth={2.5} dot={{ r: 4, fill: "#fff", strokeWidth: 2 }} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
+                <p className="text-[9px] text-muted-foreground mt-3 italic">* Logic: Sales - (Inv In + Operational + Discount)</p>
               </div>
 
             </div>
