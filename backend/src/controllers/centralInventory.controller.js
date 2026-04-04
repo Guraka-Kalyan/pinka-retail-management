@@ -10,7 +10,7 @@ const getCentralInventory = async (req, res) => {
 // @desc   Create central inventory manually
 // @route  POST /api/central-inventory
 const createCentralInventory = async (req, res) => {
-  const { batchNo, bone, boneless, mixed, skin, meat, date } = req.body;
+  const { batchNo, bone, boneless, mixed, date } = req.body;
   if (!batchNo) {
     return res.status(400).json({ success: false, message: 'batchNo is required' });
   }
@@ -18,17 +18,13 @@ const createCentralInventory = async (req, res) => {
   const nBone = Number(bone) || 0;
   const nBoneless = Number(boneless) || 0;
   const nMixed = Number(mixed) || 0;
-  const nSkin = Number(skin) || 0;
-  const nMeat = Number(meat) || 0;
-  const totalWeight = nBone + nBoneless + nMixed + nSkin + nMeat;
+  const totalWeight = nBone + nBoneless + nMixed;
 
   const item = await CentralInventory.create({
     batchNo,
     bone: nBone,
     boneless: nBoneless,
     mixed: nMixed,
-    skin: nSkin,
-    meat: nMeat,
     totalWeight,
     status: totalWeight > 0 ? 'Available' : 'Empty',
     createdAt: date ? new Date(date) : new Date()

@@ -22,8 +22,6 @@ interface InventoryRecord {
   bone: number;
   boneless: number;
   mixed: number;
-  skin: number;
-  meat: number;
   rate?: number;
   total_weight?: number;
   totalWeight?: number;
@@ -79,18 +77,16 @@ export default function InventoryIn() {
   const [bone, setBone] = useState("");
   const [boneless, setBoneless] = useState("");
   const [mixed, setMixed] = useState("");
-  const [skin, setSkin] = useState("");
-  const [meat, setMeat] = useState("");
   const [rate, setRate] = useState("");
   const [totalWeight, setTotalWeight] = useState("");
 
-  const totalKgCalculated = (Number(bone) || 0) + (Number(boneless) || 0) + (Number(mixed) || 0) + (Number(skin) || 0) + (Number(meat) || 0);
+  const totalKgCalculated = (Number(bone) || 0) + (Number(boneless) || 0) + (Number(mixed) || 0);
   const totalAmt = totalKgCalculated * (Number(rate) || 0);
 
   const totalBone = records.reduce((s, r) => s + (r.bone || 0), 0);
   const totalBoneless = records.reduce((s, r) => s + (r.boneless || 0), 0);
   const totalMixedStock = records.reduce((s, r) => s + (r.mixed || 0), 0);
-  const totalWeightOverall = records.reduce((s, r) => s + (r.totalWeight || r.total_weight || ((r.bone || 0) + (r.boneless || 0) + (r.mixed || 0) + (r.skin || 0) + (r.meat || 0))), 0);
+  const totalWeightOverall = records.reduce((s, r) => s + (r.totalWeight || r.total_weight || ((r.bone || 0) + (r.boneless || 0) + (r.mixed || 0))), 0);
   const totalValue = records.reduce((s, r) => s + (r.totalAmount || r.total_amount || r.total || 0), 0);
 
   const handleSave = async () => {
@@ -107,7 +103,7 @@ export default function InventoryIn() {
     if (isWarehouse && enteredTotalWeight !== totalKgCalculated) {
       toast({ 
         title: "Weight Mismatch", 
-        description: `Ensure: total_weight (${enteredTotalWeight}) = bone + boneless + mixed + skin + meat (${totalKgCalculated})`, 
+        description: `Ensure: total_weight (${enteredTotalWeight}) = bone + boneless + mixed (${totalKgCalculated})`, 
         variant: "destructive" 
       });
       return;
@@ -118,8 +114,6 @@ export default function InventoryIn() {
       bone: Number(bone) || 0,
       boneless: Number(boneless) || 0,
       mixed: Number(mixed) || 0,
-      skin: Number(skin) || 0,
-      meat: Number(meat) || 0,
       date: date
     } : {
       batch,
@@ -127,8 +121,6 @@ export default function InventoryIn() {
       bone: Number(bone) || 0,
       boneless: Number(boneless) || 0,
       mixed: Number(mixed) || 0,
-      skin: 0,
-      meat: 0,
       rate: Number(rate) || 0,
       totalWeight: enteredTotalWeight,
       totalAmount: totalAmt,
@@ -140,7 +132,7 @@ export default function InventoryIn() {
       await api.post(endpoint, payload);
       
       toast({ title: "Success", description: "Inventory stock entry saved successfully." });
-      setBatch(""); setTransport(""); setBone(""); setBoneless(""); setMixed(""); setSkin(""); setMeat(""); setRate(""); setTotalWeight("");
+      setBatch(""); setTransport(""); setBone(""); setBoneless(""); setMixed(""); setRate(""); setTotalWeight("");
       setDate(new Date().toISOString().split("T")[0]);
       fetchData();
     } catch (err) {
@@ -211,8 +203,6 @@ export default function InventoryIn() {
     setBone(record.bone.toString());
     setBoneless(record.boneless.toString());
     setMixed(record.mixed.toString());
-    setSkin((record.skin || 0).toString());
-    setMeat((record.meat || 0).toString());
     setRate((record.rate || 0).toString());
     setTotalWeight((record.total_weight || record.totalWeight || 0).toString());
     
@@ -248,7 +238,7 @@ export default function InventoryIn() {
     if (isWarehouse && enteredTotalWeight !== totalKgCalculated) {
       toast({ 
         title: "Weight Mismatch", 
-        description: `Ensure: total_weight (${enteredTotalWeight}) = bone + boneless + mixed + skin + meat (${totalKgCalculated})`, 
+        description: `Ensure: total_weight (${enteredTotalWeight}) = bone + boneless + mixed (${totalKgCalculated})`, 
         variant: "destructive" 
       });
       return;
@@ -259,8 +249,6 @@ export default function InventoryIn() {
       bone: Number(bone) || 0,
       boneless: Number(boneless) || 0,
       mixed: Number(mixed) || 0,
-      skin: Number(skin) || 0,
-      meat: Number(meat) || 0,
     } : {
       batch,
       transport,
@@ -277,7 +265,7 @@ export default function InventoryIn() {
       await api.put(endpoint, payload);
       toast({ title: "Updated", description: "Entry updated" });
       setEditingIndex(null);
-      setBatch(""); setTransport(""); setBone(""); setBoneless(""); setMixed(""); setSkin(""); setMeat(""); setRate(""); setTotalWeight("");
+      setBatch(""); setTransport(""); setBone(""); setBoneless(""); setMixed(""); setRate(""); setTotalWeight("");
       setDate(new Date().toISOString().split("T")[0]);
       fetchData();
     } catch (err) {
@@ -365,14 +353,6 @@ export default function InventoryIn() {
           {isWarehouse && (
             <>
               <div className="space-y-1.5">
-                <Label htmlFor="skin">Skin (kg)</Label>
-                <Input id="skin" type="number" value={skin} onChange={(e) => setSkin(e.target.value)} placeholder="0" />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="meat">Meat (kg)</Label>
-                <Input id="meat" type="number" value={meat} onChange={(e) => setMeat(e.target.value)} placeholder="0" />
-              </div>
-              <div className="space-y-1.5">
                 <Label htmlFor="totalWeight">Total Weight (kg)</Label>
                 <Input id="totalWeight" type="number" value={totalWeight} onChange={(e) => setTotalWeight(e.target.value)} placeholder="0" />
               </div>
@@ -458,8 +438,6 @@ export default function InventoryIn() {
             { header: "Boneless (kg)", accessor: (r: InventoryRecord) => `${r.boneless || 0}` },
             { header: "Mixed (kg)", accessor: (r: InventoryRecord) => `${r.mixed || 0}` },
             ...(isWarehouse ? [
-              { header: "Skin (kg)", accessor: (r: InventoryRecord) => `${r.skin || 0}` },
-              { header: "Meat (kg)", accessor: (r: InventoryRecord) => `${r.meat || 0}` },
               { header: "Total Weight (kg)", accessor: (r: InventoryRecord) => `${r.total_weight || r.totalWeight || 0}` }
             ] : []),
             ...(!isWarehouse ? [

@@ -10,8 +10,6 @@ const centralInventorySchema = new mongoose.Schema({
   bone: { type: Number, default: 0 },
   boneless: { type: Number, default: 0 },
   mixed: { type: Number, default: 0 },
-  skin: { type: Number, default: 0 },
-  meat: { type: Number, default: 0 },
   totalWeight: { type: Number, default: 0 },
   totalAmount: { type: Number, default: 0 },
   status: {

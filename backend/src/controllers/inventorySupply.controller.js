@@ -69,15 +69,13 @@ const createSupply = async (req, res) => {
   invItem.bone     = Math.max(0, invItem.bone     - nBone);
   invItem.boneless = Math.max(0, invItem.boneless - nBoneless);
   invItem.mixed    = Math.max(0, invItem.mixed    - nMixed);
-  invItem.totalWeight = invItem.bone + invItem.boneless + invItem.mixed + invItem.skin + invItem.meat;
+  invItem.totalWeight = invItem.bone + invItem.boneless + invItem.mixed;
 
   // Recalculate remaining inventory value using dynamic prices
   invItem.totalAmount =
     invItem.bone     * prices.bone     +
     invItem.boneless * prices.boneless +
-    invItem.mixed    * prices.mixed    +
-    invItem.skin     * (prices.skin || FALLBACK_PRICES.skin) +
-    invItem.meat     * (prices.meat || FALLBACK_PRICES.meat);
+    invItem.mixed    * prices.mixed;
 
   invItem.status = invItem.totalWeight > 0 ? 'Available' : 'Empty';
   await invItem.save();
@@ -154,7 +152,7 @@ const deleteSupply = async (req, res) => {
     invItem.boneless += (supply.boneless || 0);
     invItem.mixed += (supply.mixed || 0);
     
-    invItem.totalWeight = invItem.bone + invItem.boneless + invItem.mixed + invItem.skin + invItem.meat;
+    invItem.totalWeight = invItem.bone + invItem.boneless + invItem.mixed;
     
     // Fetch dynamic prices to calculate new total amount
     const prices = await getPrices(supply.shopId);
@@ -163,9 +161,7 @@ const deleteSupply = async (req, res) => {
     invItem.totalAmount =
       invItem.bone     * prices.bone     +
       invItem.boneless * prices.boneless +
-      invItem.mixed    * prices.mixed    +
-      invItem.skin     * (prices.skin || FALLBACK_PRICES.skin) +
-      invItem.meat     * (prices.meat || FALLBACK_PRICES.meat);
+      invItem.mixed    * prices.mixed;
 
     invItem.status = invItem.totalWeight > 0 ? 'Available' : 'Empty';
     await invItem.save();

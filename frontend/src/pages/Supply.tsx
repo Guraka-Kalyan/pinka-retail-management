@@ -177,8 +177,6 @@ export default function Supply() {
             { header: "Bone (kg)", accessor: "bone" },
             { header: "Boneless (kg)", accessor: "boneless" },
             { header: "Mixed (kg)", accessor: "mixed" },
-            { header: "Skin (kg)", accessor: (r) => r.skin || 0 },
-            { header: "Meat (kg)", accessor: (r) => r.meat || 0 },
             { header: "Total Weight (kg)", accessor: (r) => r.totalWeight || r.total_weight || r.total || 0 },
             { header: "Total Amount (₹)", accessor: (r) => (r.totalAmount || r.total_amount) ? `₹${(r.totalAmount || r.total_amount).toLocaleString("en-IN")}` : "-" },
             { header: "Status", accessor: (r) => {
@@ -201,7 +199,7 @@ export default function Supply() {
           <div className="bg-background rounded-sm shadow-none border w-full max-w-md p-6">
             <h3 className="text-xl font-bold mb-2">Insufficient Inventory</h3>
             <p className="text-muted-foreground mb-6">
-              Insufficient inventory based on composition breakdown (Skin/Meat/Bone requirements exceed available stock).
+              Insufficient inventory based on composition breakdown (Bone/Boneless/Mixed requirements exceed available stock).
             </p>
             <div className="flex justify-end gap-3">
               <Button variant="outline" className="border-primary text-primary hover:bg-primary hover:text-primary-foreground font-semibold" onClick={() => setShowOverrideModal(false)}>

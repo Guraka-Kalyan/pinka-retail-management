@@ -3,7 +3,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
-  ({ className, type, style, ...props }, ref) => {
+  ({ className, type, style, onWheel, ...props }, ref) => {
     return (
       <input
         type={type}
@@ -18,6 +18,12 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
           ...style,
         }}
         ref={ref}
+        onWheel={(e) => {
+          if (type === "number") {
+            (e.target as HTMLInputElement).blur();
+          }
+          onWheel?.(e);
+        }}
         {...props}
       />
     );
