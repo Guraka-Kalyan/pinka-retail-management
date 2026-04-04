@@ -13,8 +13,6 @@ const defaultPackaging = [
   { name: "Bone", price: 350 },
   { name: "Boneless", price: 400 },
   { name: "Mixed", price: 380 },
-  { name: "Skin", price: 50 },
-  { name: "Meat", price: 450 },
 ];
 
 export default function Dressing() {
@@ -50,36 +48,36 @@ export default function Dressing() {
   const handleEditClick = (r: any) => {
     setEditingBatch(r.batch);
     setEditingId(r._id);
-    setEditForm({ ...r, pkgItems: r.pkgItems || { bone: 0, boneless: 0, mixed: 0, skin: 0, meat: 0 } });
+    setEditForm({ ...r, pkgItems: r.pkgItems || { bone: 0, boneless: 0, mixed: 0 } });
   };
 
   const handleEditField = (field: string, val: any) => {
     const next = { ...editForm, [field]: val };
     if (['head', 'ribs', 'ham', 'offals'].includes(field)) {
-        const hc = Number(next.head) || 0;
-        const rc = Number(next.ribs) || 0;
-        const hmc = Number(next.ham) || 0;
-        const oc = Number(next.offals) || 0;
-        const tCarcass = hc + rc + hmc + oc;
-        const wst = hc + oc;
-        const wstPct = tCarcass > 0 ? ((wst / tCarcass) * 100).toFixed(1) : "0";
-        next.totalWeight = tCarcass;
-        next.usableMeat = tCarcass - wst;
-        next.wastagePercent = Number(wstPct);
+      const hc = Number(next.head) || 0;
+      const rc = Number(next.ribs) || 0;
+      const hmc = Number(next.ham) || 0;
+      const oc = Number(next.offals) || 0;
+      const tCarcass = hc + rc + hmc + oc;
+      const wst = hc + oc;
+      const wstPct = tCarcass > 0 ? ((wst / tCarcass) * 100).toFixed(1) : "0";
+      next.totalWeight = tCarcass;
+      next.usableMeat = tCarcass - wst;
+      next.wastagePercent = Number(wstPct);
     }
     if (['animalWeight', 'rate'].includes(field)) {
-        next.cost = Math.round((Number(next.animalWeight) || 0) * (Number(next.rate) || 0));
+      next.cost = Math.round((Number(next.animalWeight) || 0) * (Number(next.rate) || 0));
     }
     setEditForm(next);
   };
 
   const handleEditPkg = (item: string, val: any) => {
     setEditForm({
-        ...editForm,
-        pkgItems: {
-          ...editForm.pkgItems,
-          [item]: Number(val) || 0
-        }
+      ...editForm,
+      pkgItems: {
+        ...editForm.pkgItems,
+        [item]: Number(val) || 0
+      }
     });
   };
 
@@ -155,7 +153,7 @@ export default function Dressing() {
       rate: Number(rate) || 0,
       farmLocation,
     };
-    
+
     try {
       await api.post("/batches", newRecord);
       toast({ title: "Saved", description: `Animal ${animalId} recorded successfully` });
@@ -176,7 +174,7 @@ export default function Dressing() {
       toast({ title: "Error", description: "Fill all weight fields", variant: "destructive" });
       return;
     }
-    
+
     try {
       await api.put(`/batches/${linkedAnimal}`, {
         totalWeight: totalCarcass,
@@ -210,8 +208,6 @@ export default function Dressing() {
         bone: pkgItems[0].qty,
         boneless: pkgItems[1].qty,
         mixed: pkgItems[2].qty,
-        skin: pkgItems[3].qty,
-        meat: pkgItems[4].qty,
       };
 
       try {
@@ -240,8 +236,6 @@ export default function Dressing() {
           bone: pkgItems[0].qty,
           boneless: pkgItems[1].qty,
           mixed: pkgItems[2].qty,
-          skin: pkgItems[3].qty,
-          meat: pkgItems[4].qty,
         }
       };
 
@@ -362,7 +356,7 @@ export default function Dressing() {
               </Button>
               <h2 className="text-lg font-semibold m-0">Packaging — Batch [{packagingBatch}]</h2>
             </div>
-            
+
             <div className="bg-primary/15 text-primary border border-primary/30 px-5 py-2.5 rounded-sm shadow-none font-bold text-sm tracking-wide self-start sm:self-auto">
               Usable Meat: {(() => {
                 const pRec = records.find(r => r.batch === packagingBatch);
@@ -468,21 +462,19 @@ export default function Dressing() {
               {/* Packaging */}
               <div className="border rounded-sm p-4 bg-muted/20">
                 <h3 className="font-medium mb-3">Packaging</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   <div><Label>Bone (kg)</Label><Input type="number" value={editForm.pkgItems?.bone || ""} onChange={(e) => handleEditPkg("bone", e.target.value)} /></div>
                   <div><Label>Boneless (kg)</Label><Input type="number" value={editForm.pkgItems?.boneless || ""} onChange={(e) => handleEditPkg("boneless", e.target.value)} /></div>
                   <div><Label>Mixed (kg)</Label><Input type="number" value={editForm.pkgItems?.mixed || ""} onChange={(e) => handleEditPkg("mixed", e.target.value)} /></div>
-                  <div><Label>Skin (kg)</Label><Input type="number" value={editForm.pkgItems?.skin || ""} onChange={(e) => handleEditPkg("skin", e.target.value)} /></div>
-                  <div><Label>Meat (kg)</Label><Input type="number" value={editForm.pkgItems?.meat || ""} onChange={(e) => handleEditPkg("meat", e.target.value)} /></div>
                 </div>
               </div>
 
               <div className="flex items-center gap-3 mt-4">
                 <Label>Status:</Label>
                 <select className="h-9 rounded-sm border text-sm px-2 bg-background" value={editForm.status} onChange={(e) => handleEditField("status", e.target.value)}>
-                   <option value="Unslaughtered" className="bg-background text-foreground">Unslaughtered</option>
-                   <option value="Slaughtered" className="bg-background text-foreground">Slaughtered</option>
-                   <option value="Packed" className="bg-background text-foreground">Packed</option>
+                  <option value="Unslaughtered" className="bg-background text-foreground">Unslaughtered</option>
+                  <option value="Slaughtered" className="bg-background text-foreground">Slaughtered</option>
+                  <option value="Packed" className="bg-background text-foreground">Packed</option>
                 </select>
               </div>
 
@@ -503,41 +495,48 @@ export default function Dressing() {
             { header: "Batch", accessor: (r: any) => r.batchNo || r.batch || '-' },
             { header: "Animal ID", accessor: "animalId" },
             { header: "Date", accessor: "date" },
-            { header: "Total Weight", accessor: (r) => r.status === "Unslaughtered" ? `${r.animalWeight || "-"} kg` : `${r.totalWeight} kg` },
+            { header: "BSW (kg)", accessor: (r) => r.animalWeight ? `${r.animalWeight} kg` : "-" },
+            { header: "ASW (kg)", accessor: (r) => r.status === "Unslaughtered" ? "-" : `${r.totalWeight} kg` },
             { header: "Usable Meat", accessor: (r) => r.usableMeat === "-" ? "-" : `${r.usableMeat} kg` },
             { header: "Wastage %", accessor: (r) => r.wastagePercent === "-" ? "-" : `${r.wastagePercent}%` },
             { header: "Total Cost", accessor: (r) => r.cost ? `₹${r.cost.toLocaleString("en-IN")}` : "-" },
-            { header: "Price/kg (Live/Meat)", accessor: (r) => {
-               if (!r.cost) return "-";
-               const live = r.animalWeight ? (r.cost / r.animalWeight).toFixed(0) : "0";
-               const meat = r.usableMeat !== "-" ? (r.cost / Number(r.usableMeat)).toFixed(0) : "0";
-               return r.status === "Unslaughtered" ? `₹${live} (L)` : `₹${live} (L) / ₹${meat} (M)`;
-            }},
-            { header: "Status", accessor: (r) => {
-              let colorClass = "bg-secondary text-secondary-foreground";
-              if (r.status === "Packed") colorClass = "badge-success";
-              else if (r.status === "Slaughtered") colorClass = "badge-warning";
-              else if (r.status === "Unslaughtered") colorClass = "badge-error";
+            {
+              header: "PRICE/KG (BS/PS)", accessor: (r) => {
+                if (!r.cost) return "-";
+                const live = r.animalWeight ? (r.cost / r.animalWeight).toFixed(0) : "0";
+                const meat = r.usableMeat !== "-" ? (r.cost / Number(r.usableMeat)).toFixed(0) : "0";
+                return r.status === "Unslaughtered" ? `₹${live} (BS)` : `₹${live} (BS) / ₹${meat} (AS)`;
+              }
+            },
+            {
+              header: "Status", accessor: (r) => {
+                let colorClass = "bg-secondary text-secondary-foreground";
+                if (r.status === "Packed") colorClass = "badge-success";
+                else if (r.status === "Slaughtered") colorClass = "badge-warning";
+                else if (r.status === "Unslaughtered") colorClass = "badge-error";
 
-              return (
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${colorClass}`}>
-                  {r.status}
-                </span>
-              );
-            }},
-            { header: "Action", accessor: (r) => (
-              <div className="flex gap-1 items-center">
-                {r.status === "Slaughtered" && (
-                  <Button variant="outline" size="sm" className="h-8 text-xs border-primary text-primary hover:bg-primary hover:text-white mr-2" onClick={() => { setPackagingBatch(r.batch); setPackagingId(r._id); }}>
-                    Packaging
+                return (
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${colorClass}`}>
+                    {r.status}
+                  </span>
+                );
+              }
+            },
+            {
+              header: "Action", accessor: (r) => (
+                <div className="flex gap-1 items-center">
+                  {r.status === "Slaughtered" && (
+                    <Button variant="outline" size="sm" className="h-8 text-xs border-primary text-primary hover:bg-primary hover:text-white mr-2" onClick={() => { setPackagingBatch(r.batch); setPackagingId(r._id); }}>
+                      Packaging
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10" onClick={() => handleEditClick(r)}>
+                    <Pencil className="h-3.5 w-3.5" />
                   </Button>
-                )}
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10" onClick={() => handleEditClick(r)}>
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(r._id, r.batch)}><Trash2 className="h-3.5 w-3.5" /></Button>
-              </div>
-            )},
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(r._id, r.batch)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                </div>
+              )
+            },
           ]}
           data={records}
           isLoading={isLoading}

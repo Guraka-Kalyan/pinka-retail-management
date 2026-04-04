@@ -12,7 +12,7 @@ import {
 import api from "@/lib/api";
 
 // ── Default packaging prices (matches batch.controller.js) ─────────────────
-const PKG_PRICES = { bone: 350, boneless: 400, mixed: 380, skin: 50, meat: 450 };
+const PKG_PRICES = { bone: 350, boneless: 400, mixed: 380 };
 
 // ── Colours ───────────────────────────────────────────────────────────────────
 const C_PRIMARY = "#FF6B00";
@@ -33,7 +33,7 @@ interface BatchRec  {
   _id: string; batchNo: string; animalId: string; animalWeight: number;
   rate: number; cost: number; date: string; status: string;
   totalWeight: any; usableMeat: any; wastagePercent: any; head: number; ribs: number; ham: number; offals: number;
-  pkgItems: { bone: number; boneless: number; mixed: number; skin: number; meat: number; };
+  pkgItems: { bone: number; boneless: number; mixed: number; };
 }
 interface SupplyRec { _id: string; shopId: { _id: string } | null; externalRecipient: { name: string }; batch: string; total: number; totalAmount: number; date: string; }
 interface SaleRec   { shopId: string; date: string; billId: string; cash: number; phonePe: number; total: number; discountGiven: number; }
@@ -276,13 +276,11 @@ export default function Dashboard() {
     const afterValue  = slaughtered.reduce((a, b) => a + numWeight(b.totalWeight) * (b.rate || 0), 0);
 
     const packed     = fBatches.filter(b => b.status === "Packed");
-    const packedKg   = packed.reduce((a, b) => a + (b.pkgItems?.bone || 0) + (b.pkgItems?.boneless || 0) + (b.pkgItems?.mixed || 0) + (b.pkgItems?.skin || 0) + (b.pkgItems?.meat || 0), 0);
+    const packedKg   = packed.reduce((a, b) => a + (b.pkgItems?.bone || 0) + (b.pkgItems?.boneless || 0) + (b.pkgItems?.mixed || 0), 0);
     const packedVal  = packed.reduce((a, b) =>
       a + (b.pkgItems?.bone || 0) * PKG_PRICES.bone
         + (b.pkgItems?.boneless || 0) * PKG_PRICES.boneless
-        + (b.pkgItems?.mixed || 0) * PKG_PRICES.mixed
-        + (b.pkgItems?.skin || 0) * PKG_PRICES.skin
-        + (b.pkgItems?.meat || 0) * PKG_PRICES.meat, 0);
+        + (b.pkgItems?.mixed || 0) * PKG_PRICES.mixed, 0);
 
     // Per-batch line chart: before vs after slaughter — includes cost & afterValue for the table
     const lineData = fBatches.map(b => {
@@ -306,12 +304,10 @@ export default function Dashboard() {
     // Per-batch packed bar chart
     const barData = fBatches.filter(b => b.status === "Packed").map(b => ({
       name:   b.batchNo,
-      weight: (b.pkgItems?.bone || 0) + (b.pkgItems?.boneless || 0) + (b.pkgItems?.mixed || 0) + (b.pkgItems?.skin || 0) + (b.pkgItems?.meat || 0),
+      weight: (b.pkgItems?.bone || 0) + (b.pkgItems?.boneless || 0) + (b.pkgItems?.mixed || 0),
       value:  (b.pkgItems?.bone || 0) * PKG_PRICES.bone
              + (b.pkgItems?.boneless || 0) * PKG_PRICES.boneless
-             + (b.pkgItems?.mixed || 0) * PKG_PRICES.mixed
-             + (b.pkgItems?.skin || 0) * PKG_PRICES.skin
-             + (b.pkgItems?.meat || 0) * PKG_PRICES.meat,
+             + (b.pkgItems?.mixed || 0) * PKG_PRICES.mixed,
     }));
 
     return { beforeKg, beforeValue, afterKg, afterValue, packedKg, packedVal, lineData, barData };

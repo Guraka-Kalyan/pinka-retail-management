@@ -38,8 +38,6 @@ const batchSchema = new mongoose.Schema({
     bone: { type: Number, default: 0 },
     boneless: { type: Number, default: 0 },
     mixed: { type: Number, default: 0 },
-    skin: { type: Number, default: 0 },
-    meat: { type: Number, default: 0 },
   },
 }, { timestamps: true });
 

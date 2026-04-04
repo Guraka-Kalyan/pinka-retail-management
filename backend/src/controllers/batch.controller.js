@@ -45,11 +45,32 @@ const createBatch = async (req, res) => {
 // @desc   Update batch (After slaughter / Edit)
 // @route  PUT /api/batches/:id
 const updateBatch = async (req, res) => {
-  const batch = await Batch.findByIdAndUpdate(req.params.id, req.body, {
+  const currentBatch = await Batch.findById(req.params.id);
+  if (!currentBatch) return res.status(404).json({ success: false, message: 'Batch not found' });
+
+  let updateData = { ...req.body };
+
+  if (updateData.head !== undefined || updateData.ribs !== undefined || updateData.ham !== undefined || updateData.offals !== undefined) {
+    const head = Number(updateData.head !== undefined ? updateData.head : currentBatch.head) || 0;
+    const ribs = Number(updateData.ribs !== undefined ? updateData.ribs : currentBatch.ribs) || 0;
+    const ham = Number(updateData.ham !== undefined ? updateData.ham : currentBatch.ham) || 0;
+    const offals = Number(updateData.offals !== undefined ? updateData.offals : currentBatch.offals) || 0;
+
+    const totalWeight = head + ribs + ham + offals;
+    const wastage = head + offals;
+    const wastagePercent = totalWeight > 0 ? Number(((wastage / totalWeight) * 100).toFixed(1)) : 0;
+    const usableMeat = totalWeight - wastage;
+
+    updateData.totalWeight = totalWeight;
+    updateData.usableMeat = usableMeat;
+    updateData.wastagePercent = wastagePercent;
+  }
+
+  const batch = await Batch.findByIdAndUpdate(req.params.id, updateData, {
     new: true,
     runValidators: true,
   });
-  if (!batch) return res.status(404).json({ success: false, message: 'Batch not found' });
+  
   res.json({ success: true, data: batch });
 };
 
@@ -64,14 +85,12 @@ const packageBatch = async (req, res) => {
   const batch = await Batch.findById(req.params.id);
   if (!batch) return res.status(404).json({ success: false, message: 'Batch not found' });
 
-  const defaultPrices = { bone: 350, boneless: 400, mixed: 380, skin: 50, meat: 450 };
-  const totalWeight = (pkgItems.bone || 0) + (pkgItems.boneless || 0) + (pkgItems.mixed || 0) + (pkgItems.skin || 0) + (pkgItems.meat || 0);
+  const defaultPrices = { bone: 350, boneless: 400, mixed: 380 };
+  const totalWeight = (pkgItems.bone || 0) + (pkgItems.boneless || 0) + (pkgItems.mixed || 0);
   const totalAmount =
     (pkgItems.bone || 0) * defaultPrices.bone +
     (pkgItems.boneless || 0) * defaultPrices.boneless +
-    (pkgItems.mixed || 0) * defaultPrices.mixed +
-    (pkgItems.skin || 0) * defaultPrices.skin +
-    (pkgItems.meat || 0) * defaultPrices.meat;
+    (pkgItems.mixed || 0) * defaultPrices.mixed;
 
   // Update batch status and pkgItems
   batch.pkgItems = pkgItems;
@@ -86,8 +105,6 @@ const packageBatch = async (req, res) => {
     bone: pkgItems.bone || 0,
     boneless: pkgItems.boneless || 0,
     mixed: pkgItems.mixed || 0,
-    skin: pkgItems.skin || 0,
-    meat: pkgItems.meat || 0,
     totalWeight,
     totalAmount,
     status: 'Available',
