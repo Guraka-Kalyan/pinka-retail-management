@@ -1,4 +1,5 @@
 const Preparation = require('../models/Preparation.model');
+const ShopInventory = require('../models/ShopInventory.model');
 
 // @desc   Get preparations for a shop
 // @route  GET /api/shops/:shopId/preparations
@@ -34,6 +35,60 @@ const createPreparation = async (req, res) => {
   // Auto-generate refId
   const count = await Preparation.countDocuments({ shopId: req.params.shopId });
   const refId = `PREP-${String(count + 1).padStart(3, '0')}`;
+
+  // Find ShopInventory records for this shopId (FIFO - oldest first)
+  const inventoryRecords = await ShopInventory.find({ shopId: req.params.shopId }).sort({ createdAt: 1 });
+
+  let totalAvailableBone = 0;
+  let totalAvailableBoneless = 0;
+  inventoryRecords.forEach(record => {
+    totalAvailableBone += record.bone || 0;
+    totalAvailableBoneless += record.boneless || 0;
+  });
+
+  if (totalAvailableBone < boneUsed || totalAvailableBoneless < bonelessUsed) {
+    return res.status(400).json({ success: false, message: 'Insufficient stock for preparation' });
+  }
+
+  // Deduct using FIFO
+  let remainingBoneToDeduct = boneUsed;
+  let remainingBonelessToDeduct = bonelessUsed;
+
+  for (const record of inventoryRecords) {
+    if (remainingBoneToDeduct <= 0 && remainingBonelessToDeduct <= 0) break;
+
+    let updated = false;
+
+    if (remainingBoneToDeduct > 0 && record.bone > 0) {
+      if (record.bone >= remainingBoneToDeduct) {
+        record.bone -= remainingBoneToDeduct;
+        remainingBoneToDeduct = 0;
+      } else {
+        remainingBoneToDeduct -= record.bone;
+        record.bone = 0;
+      }
+      updated = true;
+    }
+
+    if (remainingBonelessToDeduct > 0 && record.boneless > 0) {
+      if (record.boneless >= remainingBonelessToDeduct) {
+        record.boneless -= remainingBonelessToDeduct;
+        remainingBonelessToDeduct = 0;
+      } else {
+        remainingBonelessToDeduct -= record.boneless;
+        record.boneless = 0;
+      }
+      updated = true;
+    }
+
+    if (updated) {
+      record.totalWeight = (record.bone || 0) + (record.boneless || 0) + (record.mixed || 0);
+      if (record.rate) {
+        record.totalAmount = record.totalWeight * record.rate;
+      }
+      await record.save();
+    }
+  }
 
   const prep = await Preparation.create({
     shopId:        req.params.shopId,

@@ -129,12 +129,16 @@ export default function Dressing() {
     defaultPackaging.map(p => ({ qty: 0, price: p.price }))
   );
 
-  const totalCarcass = (Number(head) || 0) + (Number(ribs) || 0) + (Number(ham) || 0) + (Number(offals) || 0);
-  const wastage = (Number(head) || 0) + (Number(offals) || 0);
-  const wastagePercent = totalCarcass > 0 ? ((wastage / totalCarcass) * 100).toFixed(1) : "0";
-  const usableMeat = totalCarcass - wastage;
-
   const selectedRecord: any = records.find(r => r._id === linkedAnimal);
+  const animalWeightBSW = selectedRecord?.animalWeight || 0;
+
+  const totalCarcass = (Number(head) || 0) + (Number(ribs) || 0) + (Number(ham) || 0) + (Number(offals) || 0);
+  const slaughterLoss = animalWeightBSW > 0 ? animalWeightBSW - totalCarcass : 0;
+  const carcassWaste = (Number(head) || 0) + (Number(offals) || 0);
+  const totalWastage = slaughterLoss + carcassWaste;
+  const wastagePercent = animalWeightBSW > 0 ? ((totalWastage / animalWeightBSW) * 100).toFixed(2) : "0.00";
+  const usableMeat = totalCarcass - carcassWaste;
+
   const totalCost = selectedRecord?.cost || 0;
   const costPerKg = (totalCost > 0 && usableMeat > 0) ? (totalCost / usableMeat).toFixed(2) : "0.00";
 
@@ -328,11 +332,37 @@ export default function Dressing() {
             <div><Label>Ham (kg)</Label><Input type="number" value={ham} onChange={(e) => setHam(e.target.value)} /></div>
             <div><Label>Offals (kg)</Label><Input type="number" value={offals} onChange={(e) => setOffals(e.target.value)} /></div>
           </div>
-          <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-            <div className="bg-secondary rounded-sm p-2"><span className="text-muted-foreground">Total:</span> <strong>{totalCarcass} kg</strong></div>
-            <div className="bg-secondary rounded-sm p-2"><span className="text-muted-foreground">Wastage:</span> <strong>{wastage} kg</strong></div>
-            <div className="bg-secondary rounded-sm p-2"><span className="text-muted-foreground">Wastage %:</span> <strong>{wastagePercent}%</strong></div>
-            <div className="bg-secondary rounded-sm p-2"><span className="text-muted-foreground">Usable:</span> <strong>{usableMeat} kg</strong></div>
+          <div className="mt-4 grid grid-cols-2 lg:grid-cols-6 gap-3 text-sm">
+            <div className="bg-secondary flex flex-col rounded-sm p-3">
+              <div className="text-muted-foreground whitespace-nowrap">Total (ASW):</div>
+              <strong className="text-lg">{totalCarcass} <span className="text-sm font-normal text-muted-foreground">kg</span></strong>
+              <div className="text-[10px] text-muted-foreground/70 mt-1 uppercase tracking-wide leading-tight">Head + Ribs + Ham + Offals</div>
+            </div>
+            <div className="bg-secondary flex flex-col rounded-sm p-3">
+              <div className="text-muted-foreground whitespace-nowrap">Slaughter Loss:</div>
+              <strong className="text-lg">{Number(slaughterLoss).toFixed(1)} <span className="text-sm font-normal text-muted-foreground">kg</span></strong>
+              <div className="text-[10px] text-muted-foreground/70 mt-1 uppercase tracking-wide leading-tight">BSW - ASW</div>
+            </div>
+            <div className="bg-secondary flex flex-col rounded-sm p-3">
+              <div className="text-muted-foreground whitespace-nowrap">Carcass Waste:</div>
+              <strong className="text-lg">{carcassWaste} <span className="text-sm font-normal text-muted-foreground">kg</span></strong>
+              <div className="text-[10px] text-muted-foreground/70 mt-1 uppercase tracking-wide leading-tight">Head + Offals</div>
+            </div>
+            <div className="bg-secondary flex flex-col rounded-sm p-3">
+              <div className="text-muted-foreground whitespace-nowrap">Total Wastage:</div>
+              <strong className="text-lg">{Number(totalWastage).toFixed(1)} <span className="text-sm font-normal text-muted-foreground">kg</span></strong>
+              <div className="text-[10px] text-muted-foreground/70 mt-1 uppercase tracking-wide leading-tight">Loss + Carcass</div>
+            </div>
+            <div className="bg-secondary flex flex-col rounded-sm p-3">
+              <div className="text-muted-foreground whitespace-nowrap">Wastage %:</div>
+              <strong className="text-lg">{wastagePercent}%</strong>
+              <div className="text-[10px] text-muted-foreground/70 mt-1 uppercase tracking-wide leading-tight">(Wastage ÷ BSW) × 100</div>
+            </div>
+            <div className="bg-secondary flex flex-col rounded-sm p-3 border border-primary/20 bg-primary/5">
+              <div className="text-primary/80 whitespace-nowrap">Usable Meat:</div>
+              <strong className="text-lg text-primary">{usableMeat} <span className="text-sm font-normal text-primary/70">kg</span></strong>
+              <div className="text-[10px] text-primary/50 mt-1 uppercase tracking-wide leading-tight">ASW - Carcass</div>
+            </div>
           </div>
           <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             <div className="bg-primary/5 border border-primary/20 rounded-sm p-2">
@@ -452,10 +482,56 @@ export default function Dressing() {
                   <div><Label>Ham (kg)</Label><Input type="number" value={editForm.ham || ""} onChange={(e) => handleEditField("ham", e.target.value)} /></div>
                   <div><Label>Offals (kg)</Label><Input type="number" value={editForm.offals || ""} onChange={(e) => handleEditField("offals", e.target.value)} /></div>
                 </div>
-                <div className="mt-3 flex gap-4 text-sm text-muted-foreground bg-background p-2 rounded">
-                  <span>Total: <strong className="text-foreground">{editForm.totalWeight} kg</strong></span>
-                  <span>Usable: <strong className="text-foreground">{editForm.usableMeat} kg</strong></span>
-                  <span>Wastage %: <strong className="text-foreground">{editForm.wastagePercent}%</strong></span>
+                <div className="mt-4 grid grid-cols-2 lg:grid-cols-6 gap-3 text-sm">
+                  {(() => {
+                    const ew = Number(editForm.animalWeight) || 0;
+                    const eh = Number(editForm.head) || 0;
+                    const er = Number(editForm.ribs) || 0;
+                    const eham = Number(editForm.ham) || 0;
+                    const eo = Number(editForm.offals) || 0;
+                    
+                    const eTotal = eh + er + eham + eo;
+                    const eLoss = ew > 0 ? (ew - eTotal) : 0;
+                    const eCarcass = eh + eo;
+                    const eTotalWastage = eLoss + eCarcass;
+                    const ePct = ew > 0 ? ((eTotalWastage / ew) * 100).toFixed(2) : "0.00";
+                    const eUsable = eTotal - eCarcass;
+
+                    return (
+                      <>
+                        <div className="bg-background flex flex-col rounded-sm p-3 border border-input">
+                          <div className="text-muted-foreground whitespace-nowrap">Total (ASW):</div>
+                          <strong className="text-lg">{eTotal} <span className="text-sm font-normal text-muted-foreground">kg</span></strong>
+                          <div className="text-[10px] text-muted-foreground/70 mt-1 uppercase tracking-wide leading-tight">Head + Ribs + Ham + Offals</div>
+                        </div>
+                        <div className="bg-background flex flex-col rounded-sm p-3 border border-input">
+                          <div className="text-muted-foreground whitespace-nowrap">Slaughter Loss:</div>
+                          <strong className="text-lg">{Number(eLoss).toFixed(1)} <span className="text-sm font-normal text-muted-foreground">kg</span></strong>
+                          <div className="text-[10px] text-muted-foreground/70 mt-1 uppercase tracking-wide leading-tight">BSW - ASW</div>
+                        </div>
+                        <div className="bg-background flex flex-col rounded-sm p-3 border border-input">
+                          <div className="text-muted-foreground whitespace-nowrap">Carcass Waste:</div>
+                          <strong className="text-lg">{eCarcass} <span className="text-sm font-normal text-muted-foreground">kg</span></strong>
+                          <div className="text-[10px] text-muted-foreground/70 mt-1 uppercase tracking-wide leading-tight">Head + Offals</div>
+                        </div>
+                        <div className="bg-background flex flex-col rounded-sm p-3 border border-input">
+                          <div className="text-muted-foreground whitespace-nowrap">Total Wastage:</div>
+                          <strong className="text-lg">{Number(eTotalWastage).toFixed(1)} <span className="text-sm font-normal text-muted-foreground">kg</span></strong>
+                          <div className="text-[10px] text-muted-foreground/70 mt-1 uppercase tracking-wide leading-tight">Loss + Carcass</div>
+                        </div>
+                        <div className="bg-background flex flex-col rounded-sm p-3 border border-input">
+                          <div className="text-muted-foreground whitespace-nowrap">Wastage %:</div>
+                          <strong className="text-lg">{ePct}%</strong>
+                          <div className="text-[10px] text-muted-foreground/70 mt-1 uppercase tracking-wide leading-tight">(Wastage ÷ BSW) × 100</div>
+                        </div>
+                        <div className="bg-background flex flex-col rounded-sm p-3 border border-primary/20 bg-primary/5">
+                          <div className="text-primary/80 whitespace-nowrap">Usable Meat:</div>
+                          <strong className="text-lg text-primary">{eUsable} <span className="text-sm font-normal text-primary/70">kg</span></strong>
+                          <div className="text-[10px] text-primary/50 mt-1 uppercase tracking-wide leading-tight">ASW - Carcass</div>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
 
