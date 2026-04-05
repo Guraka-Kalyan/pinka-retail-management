@@ -52,7 +52,7 @@ export default function DataTable<T extends Record<string, any>>({
       </div>
 
       <div className="rounded-sm border overflow-x-auto shadow-none" style={{backgroundColor: 'var(--card-bg)'}}>
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[800px] lg:min-w-full text-sm">
           <thead>
             <tr className="border-b" style={{backgroundColor: 'var(--table-header)'}}>
               {columns.map((col, i) => (

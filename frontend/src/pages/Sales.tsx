@@ -130,22 +130,22 @@ export default function Sales() {
   const selectedShopName = selectedShop ? shopsList.find(s => s.id === selectedShop)?.name || "Shop" : "Select a Shop";
 
   return (
-    <div className="animate-fade-in pb-12 w-full">
-      <div className="flex flex-col gap-4 mb-8">
+    <div className="animate-fade-in pb-12 w-full px-4 lg:px-0 space-y-5 lg:space-y-6">
+      <div className="flex flex-col gap-3 lg:gap-4">
         <Breadcrumb items={[{ label: "Sales" }]} />
         <div>
-          <h1 className="text-3xl font-black text-foreground tracking-tight">Sales Management</h1>
+          <h1 className="text-2xl lg:text-3xl font-black text-foreground tracking-tight">Sales Management</h1>
           <p className="text-sm text-muted-foreground mt-1 font-medium">Manage sales, calculate billing, and configure daily shop costs.</p>
         </div>
       </div>
 
       {/* FILTER BAR */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-6 w-full">
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3 w-full">
         {/* Shop Selector */}
-        <div className="flex items-center gap-3 bg-card px-3 py-1.5 rounded-sm border border-[var(--border)] shadow-none h-11 w-full sm:w-auto hover:border-slate-300 transition-all">
+        <div className="flex items-center gap-3 bg-card px-4 lg:px-3 py-2.5 lg:py-1.5 rounded-sm border border-[var(--border)] shadow-none w-full lg:w-auto lg:h-11 hover:border-slate-300 transition-all">
           <Store className="w-5 h-5 text-primary shrink-0" />
           <Select value={selectedShop} onValueChange={setSelectedShop}>
-            <SelectTrigger className="w-full sm:w-[220px] border-0 bg-transparent p-0 h-auto focus:ring-0 shadow-none font-bold text-sm text-foreground">
+            <SelectTrigger className="w-full lg:w-[220px] border-0 bg-transparent p-0 h-auto focus:ring-0 shadow-none font-bold text-sm text-foreground">
               <SelectValue placeholder="Select a Shop" />
             </SelectTrigger>
             <SelectContent>
@@ -159,12 +159,12 @@ export default function Sales() {
         {/* Daily Costs Button */}
         <Dialog>
           <DialogTrigger asChild>
-            <Button variant="outline" className="h-11 rounded-sm bg-card border-[var(--border)] shadow-none transition-all hover:text-primary hover:border-primary/30 font-bold w-full sm:w-auto" style={{color: 'var(--text-primary)'}}>
+            <Button variant="outline" className="h-[48px] lg:h-11 rounded-sm bg-card border-[var(--border)] shadow-none transition-all hover:text-primary hover:border-primary/30 font-bold w-full lg:w-auto" style={{color: 'var(--text-primary)'}}>
               <Settings2 className="w-4 h-4 mr-2" />
               Daily Costs
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="w-[95vw] sm:max-w-[425px] rounded-md">
             <DialogHeader>
               <DialogTitle>Daily Selling Costs</DialogTitle>
             </DialogHeader>
@@ -172,7 +172,7 @@ export default function Sales() {
               <p className="text-sm text-muted-foreground">Configure exactly how much each item cuts and mixes should cost today.</p>
               {["fry", "curry", "bone", "boneless", "mixed"].map((cut) => (
                 <div key={cut} className="flex items-center justify-between gap-4 border-b border-secondary pb-4 last:border-0 last:pb-0">
-                  <label className="font-bold text-sm tracking-wide text-muted-foreground w-24 uppercase">{cut}</label>
+                  <label className="font-bold text-sm tracking-wide text-muted-foreground w-20 lg:w-24 uppercase">{cut}</label>
                   <div className="relative flex-1">
                     <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -188,7 +188,7 @@ export default function Sales() {
               <div className="pt-2">
                 <Button
                   onClick={handleSaveCosts}
-                  className="w-full bg-primary hover:bg-primary/80 text-white h-12 shadow-none font-bold tracking-widest uppercase rounded-sm"
+                  className="w-full bg-primary hover:bg-primary/80 text-white h-[48px] lg:h-12 shadow-none font-bold tracking-widest uppercase rounded-sm"
                 >
                   Save Costs
                 </Button>
@@ -200,12 +200,12 @@ export default function Sales() {
         {/* Counter Cash Button */}
         <Dialog open={isCounterCashOpen} onOpenChange={setIsCounterCashOpen}>
           <DialogTrigger asChild>
-            <Button onClick={(e) => { e.preventDefault(); openCounterCashModal(); }} variant="outline" className="h-11 rounded-sm bg-card border-[var(--border)] shadow-none transition-all hover:text-primary hover:border-primary/30 font-bold w-full sm:w-auto" style={{color: 'var(--text-primary)'}}>
+            <Button onClick={(e) => { e.preventDefault(); openCounterCashModal(); }} variant="outline" className="h-[48px] lg:h-11 rounded-sm bg-card border-[var(--border)] shadow-none transition-all hover:text-primary hover:border-primary/30 font-bold w-full lg:w-auto" style={{color: 'var(--text-primary)'}}>
               <Wallet className="w-4 h-4 mr-2" />
               Counter Cash
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="w-[95vw] sm:max-w-[425px] rounded-md">
             <DialogHeader>
               <DialogTitle>Counter Cash</DialogTitle>
               <p className="text-sm text-muted-foreground mt-1">Set opening cash for <span className="font-bold text-foreground">{selectedShopName}</span> — {todayStr}</p>
@@ -218,23 +218,23 @@ export default function Sales() {
                   <Input
                     type="number"
                     placeholder="0"
-                    className="pl-9 h-11 bg-card border-zinc-200 font-bold"
+                    className="pl-9 h-[48px] lg:h-11 bg-card border-zinc-200 font-bold"
                     value={counterCashInput}
                     onChange={(e) => setCounterCashInput(e.target.value)}
                   />
                 </div>
               </div>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsCounterCashOpen(false)} className="rounded-sm font-bold w-full sm:w-auto">Cancel</Button>
-              <Button onClick={handleSaveCounterCash} className="bg-primary hover:bg-primary/80 text-white font-bold w-full sm:w-auto shadow-none rounded-sm">Save</Button>
+            <DialogFooter className="gap-3 lg:gap-0">
+              <Button variant="outline" onClick={() => setIsCounterCashOpen(false)} className="rounded-sm font-bold w-full lg:w-auto h-[48px] lg:h-10">Cancel</Button>
+              <Button onClick={handleSaveCounterCash} className="bg-primary hover:bg-primary/80 text-white font-bold w-full lg:w-auto shadow-none rounded-sm h-[48px] lg:h-10">Save</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
 
       {!selectedShop ? (
-        <div className="flex flex-col items-center justify-center py-20 bg-card rounded-sm border border-[var(--border)] shadow-none text-center">
+        <div className="flex flex-col items-center justify-center py-16 lg:py-20 bg-card rounded-sm border border-[var(--border)] shadow-none text-center px-4">
           <Store className="w-12 h-12 text-muted-foreground/30 mb-4" />
           <p className="font-bold text-foreground text-lg mb-1">No Shop Selected</p>
           <p className="text-sm text-muted-foreground">Select a shop from the dropdown above to view and manage its sales records.</p>
@@ -242,36 +242,30 @@ export default function Sales() {
       ) : (
         <>
           {/* SUMMARY STRIP */}
-          <div className="bg-card w-full rounded-sm border border-[var(--border)] mb-6 px-6 py-4 shadow-none">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full text-sm font-semibold">
-              <div className="flex flex-col">
+          <div className="bg-card w-full rounded-sm border border-[var(--border)] p-4 lg:px-6 lg:py-4 shadow-none">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 w-full text-sm font-semibold">
+              <div className="flex flex-col p-3 lg:p-0 bg-muted/20 lg:bg-transparent rounded-sm lg:rounded-none">
                 <span className="text-xs uppercase tracking-wider text-muted-foreground/80 mb-1">Opening Cash</span>
                 {hasOpeningCash ? (
-                  <span className="text-lg text-foreground font-bold">₹{counterCashVal.toLocaleString()}</span>
+                  <span className="text-lg lg:text-lg text-foreground font-bold">₹{counterCashVal.toLocaleString()}</span>
                 ) : (
                   <Button variant="link" onClick={openCounterCashModal} className="p-0 h-auto text-primary font-bold justify-start">Set Opening Cash</Button>
                 )}
               </div>
-              <div className="flex flex-col">
+              <div className="flex flex-col p-3 lg:p-0 bg-muted/20 lg:bg-transparent rounded-sm lg:rounded-none">
                 <span className="text-xs uppercase tracking-wider text-muted-foreground/80 mb-1">Sales</span>
-                <span className="text-lg text-foreground font-bold">₹{todayCashSales.toLocaleString()}</span>
+                <span className="text-lg lg:text-lg text-foreground font-bold">₹{todayCashSales.toLocaleString()}</span>
               </div>
-              <div className="flex flex-col">
+              <div className="flex flex-col p-3 lg:p-0 bg-primary/5 lg:bg-transparent rounded-sm lg:rounded-none border border-primary/10 lg:border-0 relative overflow-hidden">
+                <div className="absolute left-0 top-0 w-1 h-full bg-primary lg:hidden" />
                 <span className="text-xs uppercase tracking-wider text-muted-foreground/80 mb-1">Counter Total</span>
-                <span className="text-lg text-foreground font-black text-primary">₹{(counterCashVal + todayCashSales).toLocaleString()}</span>
+                <span className="text-xl lg:text-lg text-foreground font-black text-primary">₹{(counterCashVal + todayCashSales).toLocaleString()}</span>
               </div>
             </div>
           </div>
 
-          <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
-            <div className="bg-card rounded-sm shadow-none border overflow-hidden">
-              <div className="px-6 py-4 border-b" style={{backgroundColor: 'var(--table-header)'}}>
-                <h2 className="text-xl font-bold" style={{color: 'var(--text-primary)'}}>Sales Records</h2>
-              </div>
-              <div className="p-6">
-                <InventoryOut shopIdFilter={selectedShop} />
-              </div>
-            </div>
+          <div className="animate-in fade-in zoom-in-95 duration-300">
+            <InventoryOut shopIdFilter={selectedShop} />
           </div>
         </>
       )}

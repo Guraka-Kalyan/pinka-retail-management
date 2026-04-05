@@ -1,0 +1,11 @@
+
+d:\Freelancer\shop\pinka-retail-management\frontend\src\pages\InventoryOut.tsx
+   79:38  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+   80:38  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+  116:6   warning  React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  119:52  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+  178:47  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+  179:51  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+
+Γ£û 6 problems (5 errors, 1 warning)
+

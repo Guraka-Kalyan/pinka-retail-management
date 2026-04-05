@@ -359,13 +359,13 @@ export default function InventoryOut({
     <div className="animate-fade-in">
 
       {/* KPI Dashboard - Top Section */}
-      <div className="space-y-6 mb-8">
+      <div className="space-y-4 lg:space-y-6 mb-4 lg:mb-8">
          {/* ROW 1: TOTAL AVAILABLE STOCK */}
          <div>
-            <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3">Total Available Stock & Preparation</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <h3 className="text-xs lg:text-sm font-bold text-muted-foreground uppercase tracking-tight lg:tracking-wider mb-2 lg:mb-3">Total Available Stock & Preparation</h3>
+            <div className="grid grid-cols-3 lg:grid-cols-6 gap-2 lg:gap-4">
               <StatCard title="Overall Total" value={`${totalStock} kg`} icon={null} />
-              <StatCard title="Bone Available" value={`${availBone} kg`} icon={null} />
+              <StatCard title="Bone Avail." value={`${availBone} kg`} icon={null} />
               <StatCard title="Boneless Avail." value={`${availBoneless} kg`} icon={null} />
               <StatCard title="Mixed Avail." value={`${availMixed} kg`} icon={null} />
               <StatCard title="Fry Prep." value={`${availFry} kg`} icon={null} />
@@ -375,8 +375,8 @@ export default function InventoryOut({
 
          {/* ROW 2: TOTAL STOCK SOLD */}
          <div>
-            <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3">Total Stock Sold</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <h3 className="text-xs lg:text-sm font-bold text-muted-foreground uppercase tracking-tight lg:tracking-wider mb-2 lg:mb-3">Total Stock Sold</h3>
+            <div className="grid grid-cols-3 lg:grid-cols-6 gap-2 lg:gap-4">
               <StatCard title="Overall Total Sold" className="bg-card border-dashed" value={`${totalBoneSold + totalBonelessSold + totalMixedSold + totalFrySold + totalCurrySold} kg`} icon={null} />
               <StatCard title="Bone Sold" value={`${totalBoneSold} kg`} icon={null} />
               <StatCard title="Boneless Sold" value={`${totalBonelessSold} kg`} icon={null} />
@@ -388,8 +388,8 @@ export default function InventoryOut({
 
          {/* ROW 3: TOTAL AMOUNT */}
          <div>
-            <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3">Total Sales Amount</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <h3 className="text-xs lg:text-sm font-bold text-muted-foreground uppercase tracking-tight lg:tracking-wider mb-2 lg:mb-3">Total Sales Amount</h3>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4">
               <StatCard title="Total Amount Received (₹)" value={`₹${(totalCash + totalPhonePe).toLocaleString("en-IN")}`} icon={null} />
               <StatCard title="Cash Received" value={`₹${totalCash.toLocaleString("en-IN")}`} icon={null} />
               <StatCard title="PhonePe Received" value={`₹${totalPhonePe.toLocaleString("en-IN")}`} icon={null} />
@@ -399,20 +399,20 @@ export default function InventoryOut({
       </div>
 
       {/* Entry Form */}
-      <div className="rounded-sm border bg-card shadow-none mb-8 overflow-hidden hover:bg-[var(--table-row-2)] transition-colors">
-        <div className="px-6 py-4 border-b border-border flex items-center gap-3" style={{backgroundColor: 'var(--table-header)'}}>
-          <div className="w-1.5 h-6 bg-primary rounded-full"></div>
-          <h2 className="text-xl font-black text-foreground tracking-tight uppercase">Daily Entry Form</h2>
+      <div className="rounded-sm border bg-card shadow-none mb-4 lg:mb-8 overflow-hidden hover:bg-[var(--table-row-2)] transition-colors">
+        <div className="px-3 lg:px-6 py-3 lg:py-4 border-b border-border flex items-center gap-2 lg:gap-3" style={{backgroundColor: 'var(--table-header)'}}>
+          <div className="w-1 lg:w-1.5 h-5 lg:h-6 bg-primary rounded-full"></div>
+          <h2 className="text-base lg:text-xl font-black text-foreground tracking-tight uppercase">Daily Entry Form</h2>
         </div>
-        <div className="p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+        <div className="p-2 lg:p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-12">
 
             {/* Section B */}
-            <div className="space-y-6">
-              <h3 className="text-xl font-bold text-muted-foreground uppercase flex items-center gap-3 border-b pb-3 mb-4">
-                <Beef className="h-6 w-6" /> Section B - Sales
+            <div className="space-y-4 lg:space-y-6">
+              <h3 className="text-sm lg:text-xl font-bold text-muted-foreground uppercase flex items-center gap-2 lg:gap-3 border-b pb-2 lg:pb-3 mb-2 lg:mb-4">
+                <Beef className="h-4 w-4 lg:h-6 lg:w-6" /> Section B - Sales
               </h3>
-              <div className="space-y-5">
+              <div className="space-y-2 lg:space-y-5">
                 {[
                   { label: "Bone", val: boneSold, setter: setBoneSold, price: sellingCosts.bone, total: boneTotalAmt },
                   { label: "Boneless", val: bonelessSold, setter: setBonelessSold, price: sellingCosts.boneless, total: bonelessTotalAmt },
@@ -420,24 +420,24 @@ export default function InventoryOut({
                   { label: "Curry", val: currySold, setter: setCurrySold, price: sellingCosts.curry, total: curryTotalAmt },
                   { label: "Mixed", val: mixedSold, setter: setMixedSold, price: sellingCosts.mixed, total: mixedTotalAmt },
                 ].map((item) => (
-                  <div key={item.label} className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 p-4 rounded-sm border border-border" style={{backgroundColor: 'var(--table-row-2)'}}>
-                    <div className="space-y-2">
-                       <Label className="text-lg font-semibold text-muted-foreground">{item.label} Sold (kg)</Label>
+                  <div key={item.label} className="grid grid-cols-2 md:grid-cols-3 gap-1.5 lg:gap-6 p-1.5 lg:p-4 rounded-sm border border-border" style={{backgroundColor: 'var(--table-row-2)'}}>
+                    <div className="space-y-0.5 lg:space-y-2">
+                       <Label className="text-[11px] lg:text-lg font-semibold text-muted-foreground leading-tight whitespace-normal">{item.label} Sold (kg)</Label>
                       <Input 
                         type="number" 
                         value={item.val} 
                         onChange={(e) => item.setter(e.target.value)} 
                         placeholder="0" 
-                        className="h-[56px] text-2xl font-bold border-2 focus-visible:ring-primary focus-visible:border-primary px-4 shadow-none bg-background"
+                        className="h-8 lg:h-[56px] text-sm lg:text-2xl font-bold border-2 focus-visible:ring-primary focus-visible:border-primary px-2 lg:px-4 shadow-none bg-background"
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-lg font-semibold text-muted-foreground">Price (₹/kg)</Label>
-                      <Input readOnly className="h-[56px] text-xl bg-muted/30 font-bold border-2 text-foreground" value={item.price} />
+                    <div className="space-y-0.5 lg:space-y-2">
+                      <Label className="text-[11px] lg:text-lg font-semibold text-muted-foreground leading-tight whitespace-normal">Price (₹/kg)</Label>
+                      <Input readOnly className="h-8 lg:h-[56px] text-xs lg:text-xl bg-muted/30 font-bold border-2 text-foreground px-2 lg:px-4" value={item.price} />
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-lg font-semibold text-muted-foreground">Total (₹)</Label>
-                      <Input readOnly className="h-[56px] text-2xl font-black border-2 border-info/30 text-info" value={item.total} style={{backgroundColor: 'var(--primary-light-bg)'}} />
+                    <div className="col-span-2 md:col-span-1 space-y-0.5 lg:space-y-2 mt-0.5 md:mt-0">
+                      <Label className="text-[11px] lg:text-lg font-semibold text-muted-foreground leading-tight whitespace-normal">Total (₹)</Label>
+                      <Input readOnly className="h-8 lg:h-[56px] text-sm lg:text-2xl font-black border-2 border-info/30 text-info px-2 lg:px-4" value={item.total} style={{backgroundColor: 'var(--primary-light-bg)'}} />
                     </div>
                   </div>
                 ))}
@@ -445,62 +445,62 @@ export default function InventoryOut({
             </div>
 
             {/* Section C */}
-            <div className="space-y-6">
-              <h3 className="text-xl font-bold text-muted-foreground uppercase flex items-center gap-3 border-b pb-3 mb-4">
-                <Wallet className="h-6 w-6" /> Section C - Payment
+            <div className="space-y-4 lg:space-y-6 mt-4 lg:mt-0">
+              <h3 className="text-sm lg:text-xl font-bold text-muted-foreground uppercase flex items-center gap-2 lg:gap-3 border-b pb-2 lg:pb-3 mb-2 lg:mb-4">
+                <Wallet className="h-4 w-4 lg:h-6 lg:w-6" /> Section C - Payment
               </h3>
-              <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-1.5 lg:gap-6 lg:block lg:space-y-6">
                 
-                <div className="p-6 rounded-sm border-2 border-info/20 shadow-none flex justify-between items-center relative overflow-hidden" style={{backgroundColor: 'var(--primary-light-bg)'}}>
-                  <div className="absolute top-0 left-0 w-1.5 h-full bg-info" />
-                  <span className="font-bold text-info/80 justify-start pl-2 uppercase tracking-widest text-sm">Bill Total</span>
-                  <span className="text-4xl font-black text-info flex items-center tracking-tight"><IndianRupee className="w-8 h-8 mr-1" />{grandTotalAmt.toLocaleString("en-IN")}</span>
+                <div className="col-span-2 p-2 lg:p-6 rounded-sm border-2 border-info/20 shadow-none flex justify-between items-center relative overflow-hidden" style={{backgroundColor: 'var(--primary-light-bg)'}}>
+                  <div className="absolute top-0 left-0 w-1 lg:w-1.5 h-full bg-info" />
+                  <span className="font-bold text-info/80 justify-start pl-1 uppercase tracking-tight lg:tracking-widest text-[10px] lg:text-sm whitespace-normal leading-tight">Bill Total</span>
+                  <span className="text-xl lg:text-4xl font-black text-info flex items-center tracking-tight"><IndianRupee className="w-4 h-4 lg:w-8 lg:h-8 mr-0.5 lg:mr-1" />{grandTotalAmt.toLocaleString("en-IN")}</span>
                 </div>
                 
-                <div className="space-y-2 p-5 rounded-sm border border-border" style={{backgroundColor: 'var(--table-row-2)'}}>
-                  <Label className="text-lg font-semibold block mb-2">Cash Received (₹)</Label>
+                <div className="space-y-0.5 lg:space-y-2 p-1.5 lg:p-5 rounded-sm border border-border" style={{backgroundColor: 'var(--table-row-2)'}}>
+                  <Label className="text-[10px] lg:text-lg font-semibold block mb-0.5 lg:mb-2 whitespace-normal leading-tight">Cash (₹)</Label>
                   <Input 
                     type="number" 
                     value={cash} 
                     onChange={(e) => setCash(e.target.value)} 
                     placeholder="0" 
-                    className="h-[60px] text-3xl font-bold border-2 focus-visible:ring-primary focus-visible:border-primary px-4 bg-background"
+                    className="h-8 lg:h-[60px] text-sm lg:text-3xl font-bold border-2 focus-visible:ring-primary focus-visible:border-primary px-2 lg:px-4 bg-background"
                   />
                 </div>
                 
-                <div className="space-y-2 p-5 rounded-sm border border-border" style={{backgroundColor: 'var(--table-row-2)'}}>
-                  <Label className="text-lg font-semibold block mb-2">PhonePe Received (₹)</Label>
+                <div className="space-y-0.5 lg:space-y-2 p-1.5 lg:p-5 rounded-sm border border-border" style={{backgroundColor: 'var(--table-row-2)'}}>
+                  <Label className="text-[10px] lg:text-lg font-semibold block mb-0.5 lg:mb-2 whitespace-normal leading-tight">PhonePe (₹)</Label>
                   <Input 
                     type="number" 
                     value={phonePe} 
                     onChange={(e) => setPhonePe(e.target.value)} 
                     placeholder="0" 
-                    className="h-[60px] text-3xl font-bold border-2 focus-visible:ring-primary focus-visible:border-primary px-4 text-info bg-background"
+                    className="h-8 lg:h-[60px] text-sm lg:text-3xl font-bold border-2 focus-visible:ring-primary focus-visible:border-primary px-2 lg:px-4 text-info bg-background"
                   />
                 </div>
                 
-                <div className="p-5 rounded-sm flex justify-between items-center shadow-none block border-2 border-destructive badge-error">
-                  <span className="font-extrabold uppercase tracking-widest text-lg">Discount Given:</span>
-                  <span className="text-3xl font-black flex items-center"><IndianRupee className="w-6 h-6 mr-1" />{discountGivenVal.toLocaleString("en-IN")}</span>
+                <div className="p-2 lg:p-5 rounded-sm flex flex-col justify-center items-center lg:flex-row lg:justify-between shadow-none block border-2 border-destructive badge-error gap-0.5 lg:gap-0">
+                  <span className="font-bold lg:font-extrabold uppercase tracking-tight lg:tracking-widest text-[10px] lg:text-lg text-center whitespace-normal leading-tight">Discount:</span>
+                  <span className="text-sm lg:text-3xl font-black flex items-center"><IndianRupee className="w-3 h-3 lg:w-6 lg:h-6 mr-0.5 lg:mr-1" />{discountGivenVal.toLocaleString("en-IN")}</span>
                 </div>
 
-                <div className="p-6 rounded-sm border-2 border-success/20 shadow-none flex justify-between items-center relative overflow-hidden bg-success/5">
-                  <div className="absolute top-0 left-0 w-1.5 h-full bg-success" />
-                  <span className="font-bold text-success/80 justify-start pl-2 uppercase tracking-widest text-sm">Amount Paid</span>
-                  <span className="text-4xl font-black text-success flex items-center tracking-tight"><IndianRupee className="w-8 h-8 mr-1" />{paymentTotal.toLocaleString("en-IN")}</span>
+                <div className="p-2 lg:p-6 rounded-sm border-2 border-success/20 shadow-none flex flex-col justify-center items-center lg:flex-row lg:justify-between relative overflow-hidden bg-success/5 gap-0.5 lg:gap-0">
+                  <div className="absolute top-0 left-0 w-1 lg:w-1.5 h-full bg-success" />
+                  <span className="font-bold text-success/80 justify-start lg:pl-2 uppercase tracking-tight lg:tracking-widest text-[10px] lg:text-sm text-center whitespace-normal leading-tight">Amount Paid</span>
+                  <span className="text-lg lg:text-4xl font-black text-success flex items-center tracking-tight"><IndianRupee className="w-4 h-4 lg:w-8 lg:h-8 mr-0.5 lg:mr-1" />{paymentTotal.toLocaleString("en-IN")}</span>
                 </div>
                 
               </div>
             </div>
           </div>
 
-          <div className="flex flex-col md:flex-row gap-4 md:gap-6 mt-10 pt-6 border-t">
-            <Button onClick={handleSaveSales} className="flex-1 h-[60px] text-xl bg-primary hover:bg-primary/80 font-bold text-white shadow-none">
+          <div className="grid grid-cols-2 lg:flex lg:flex-row gap-1.5 lg:gap-6 mt-3 lg:mt-10 pt-3 lg:pt-6 border-t">
+            <Button onClick={handleSaveSales} className="lg:flex-1 h-9 lg:h-[60px] text-[10px] sm:text-sm lg:text-xl bg-primary hover:bg-primary/80 font-bold text-white shadow-none whitespace-normal leading-tight px-1 lg:px-4">
               Save Sales Entry
             </Button>
             <Button 
               variant="outline" 
-              className="flex-1 h-[60px] text-xl border-2 border-primary text-primary hover:bg-primary hover:text-white font-bold shadow-none"
+              className="lg:flex-1 h-9 lg:h-[60px] text-[10px] sm:text-sm lg:text-xl border-2 border-primary text-primary hover:bg-primary hover:text-white font-bold shadow-none whitespace-normal leading-tight px-1 lg:px-4"
               onClick={() => toast({ title: "Redirecting...", description: "Opening Billing System" })}
             >
               Generate Bill
@@ -510,9 +510,9 @@ export default function InventoryOut({
       </div>
 
       {/* Sales Log Table */}
-      <div className="rounded-sm border bg-card shadow-none mb-8">
-        <div className="px-6 py-4 border-b flex justify-between items-center border-border" style={{backgroundColor: 'var(--table-header)'}}>
-          <h2 className="text-lg font-black text-foreground uppercase tracking-wide">Daily Sales Log</h2>
+      <div className="rounded-sm border bg-card shadow-none mb-5 lg:mb-8 w-full max-w-full">
+        <div className="px-4 lg:px-6 py-4 border-b flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0 border-border" style={{backgroundColor: 'var(--table-header)'}}>
+          <h2 className="text-md lg:text-lg font-black text-foreground uppercase tracking-wide">Daily Sales Log</h2>
           <Dialog>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm" className="text-xs h-8">
@@ -559,7 +559,7 @@ export default function InventoryOut({
             </DialogContent>
           </Dialog>
         </div>
-        <div className="p-2 border-b">
+        <div className="p-2 lg:p-6 border-b w-full">
           <DataTable
             isLoading={isLoading}
             columns={[

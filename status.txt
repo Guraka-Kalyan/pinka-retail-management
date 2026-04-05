@@ -1,0 +1,10 @@
+ M backend/src/routes/report.routes.js
+ M frontend/src/components/DataTable.tsx
+ M frontend/src/components/StatCard.tsx
+ M frontend/src/pages/InventoryOut.tsx
+ M frontend/src/pages/Reports.tsx
+ M frontend/src/pages/Sales.tsx
+?? backend/src/controllers/analytics.controller.js
+?? diff.txt
+?? frontend/eslint_output.txt
+?? status.txt
