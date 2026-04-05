@@ -334,32 +334,32 @@ export default function Dressing() {
           </div>
           <div className="mt-4 grid grid-cols-2 lg:grid-cols-6 gap-3 text-sm">
             <div className="bg-secondary flex flex-col rounded-sm p-3">
-              <div className="text-muted-foreground whitespace-nowrap">Total (ASW):</div>
+              <div className="text-muted-foreground">Total (ASW):</div>
               <strong className="text-lg">{totalCarcass} <span className="text-sm font-normal text-muted-foreground">kg</span></strong>
               <div className="text-[10px] text-muted-foreground/70 mt-1 uppercase tracking-wide leading-tight">Head + Ribs + Ham + Offals</div>
             </div>
             <div className="bg-secondary flex flex-col rounded-sm p-3">
-              <div className="text-muted-foreground whitespace-nowrap">Slaughter Loss:</div>
+              <div className="text-muted-foreground">Slaughter Loss:</div>
               <strong className="text-lg">{Number(slaughterLoss).toFixed(1)} <span className="text-sm font-normal text-muted-foreground">kg</span></strong>
               <div className="text-[10px] text-muted-foreground/70 mt-1 uppercase tracking-wide leading-tight">BSW - ASW</div>
             </div>
             <div className="bg-secondary flex flex-col rounded-sm p-3">
-              <div className="text-muted-foreground whitespace-nowrap">Carcass Waste:</div>
+              <div className="text-muted-foreground">Carcass Waste:</div>
               <strong className="text-lg">{carcassWaste} <span className="text-sm font-normal text-muted-foreground">kg</span></strong>
               <div className="text-[10px] text-muted-foreground/70 mt-1 uppercase tracking-wide leading-tight">Head + Offals</div>
             </div>
             <div className="bg-secondary flex flex-col rounded-sm p-3">
-              <div className="text-muted-foreground whitespace-nowrap">Total Wastage:</div>
+              <div className="text-muted-foreground">Total Wastage:</div>
               <strong className="text-lg">{Number(totalWastage).toFixed(1)} <span className="text-sm font-normal text-muted-foreground">kg</span></strong>
               <div className="text-[10px] text-muted-foreground/70 mt-1 uppercase tracking-wide leading-tight">Loss + Carcass</div>
             </div>
             <div className="bg-secondary flex flex-col rounded-sm p-3">
-              <div className="text-muted-foreground whitespace-nowrap">Wastage %:</div>
+              <div className="text-muted-foreground">Wastage %:</div>
               <strong className="text-lg">{wastagePercent}%</strong>
               <div className="text-[10px] text-muted-foreground/70 mt-1 uppercase tracking-wide leading-tight">(Wastage ÷ BSW) × 100</div>
             </div>
             <div className="bg-secondary flex flex-col rounded-sm p-3 border border-primary/20 bg-primary/5">
-              <div className="text-primary/80 whitespace-nowrap">Usable Meat:</div>
+              <div className="text-primary/80">Usable Meat:</div>
               <strong className="text-lg text-primary">{usableMeat} <span className="text-sm font-normal text-primary/70">kg</span></strong>
               <div className="text-[10px] text-primary/50 mt-1 uppercase tracking-wide leading-tight">ASW - Carcass</div>
             </div>
@@ -500,32 +500,32 @@ export default function Dressing() {
                     return (
                       <>
                         <div className="bg-background flex flex-col rounded-sm p-3 border border-input">
-                          <div className="text-muted-foreground whitespace-nowrap">Total (ASW):</div>
+                          <div className="text-muted-foreground">Total (ASW):</div>
                           <strong className="text-lg">{eTotal} <span className="text-sm font-normal text-muted-foreground">kg</span></strong>
                           <div className="text-[10px] text-muted-foreground/70 mt-1 uppercase tracking-wide leading-tight">Head + Ribs + Ham + Offals</div>
                         </div>
                         <div className="bg-background flex flex-col rounded-sm p-3 border border-input">
-                          <div className="text-muted-foreground whitespace-nowrap">Slaughter Loss:</div>
+                          <div className="text-muted-foreground">Slaughter Loss:</div>
                           <strong className="text-lg">{Number(eLoss).toFixed(1)} <span className="text-sm font-normal text-muted-foreground">kg</span></strong>
                           <div className="text-[10px] text-muted-foreground/70 mt-1 uppercase tracking-wide leading-tight">BSW - ASW</div>
                         </div>
                         <div className="bg-background flex flex-col rounded-sm p-3 border border-input">
-                          <div className="text-muted-foreground whitespace-nowrap">Carcass Waste:</div>
+                          <div className="text-muted-foreground">Carcass Waste:</div>
                           <strong className="text-lg">{eCarcass} <span className="text-sm font-normal text-muted-foreground">kg</span></strong>
                           <div className="text-[10px] text-muted-foreground/70 mt-1 uppercase tracking-wide leading-tight">Head + Offals</div>
                         </div>
                         <div className="bg-background flex flex-col rounded-sm p-3 border border-input">
-                          <div className="text-muted-foreground whitespace-nowrap">Total Wastage:</div>
+                          <div className="text-muted-foreground">Total Wastage:</div>
                           <strong className="text-lg">{Number(eTotalWastage).toFixed(1)} <span className="text-sm font-normal text-muted-foreground">kg</span></strong>
                           <div className="text-[10px] text-muted-foreground/70 mt-1 uppercase tracking-wide leading-tight">Loss + Carcass</div>
                         </div>
                         <div className="bg-background flex flex-col rounded-sm p-3 border border-input">
-                          <div className="text-muted-foreground whitespace-nowrap">Wastage %:</div>
+                          <div className="text-muted-foreground">Wastage %:</div>
                           <strong className="text-lg">{ePct}%</strong>
                           <div className="text-[10px] text-muted-foreground/70 mt-1 uppercase tracking-wide leading-tight">(Wastage ÷ BSW) × 100</div>
                         </div>
                         <div className="bg-background flex flex-col rounded-sm p-3 border border-primary/20 bg-primary/5">
-                          <div className="text-primary/80 whitespace-nowrap">Usable Meat:</div>
+                          <div className="text-primary/80">Usable Meat:</div>
                           <strong className="text-lg text-primary">{eUsable} <span className="text-sm font-normal text-primary/70">kg</span></strong>
                           <div className="text-[10px] text-primary/50 mt-1 uppercase tracking-wide leading-tight">ASW - Carcass</div>
                         </div>
