@@ -56,12 +56,16 @@ const updateBatch = async (req, res) => {
     const ham = Number(updateData.ham !== undefined ? updateData.ham : currentBatch.ham) || 0;
     const offals = Number(updateData.offals !== undefined ? updateData.offals : currentBatch.offals) || 0;
 
-    const totalWeight = head + ribs + ham + offals;
-    const wastage = head + offals;
-    const wastagePercent = totalWeight > 0 ? Number(((wastage / totalWeight) * 100).toFixed(1)) : 0;
-    const usableMeat = totalWeight - wastage;
+    const animalWeight = Number(updateData.animalWeight !== undefined ? updateData.animalWeight : currentBatch.animalWeight) || 0;
 
-    updateData.totalWeight = totalWeight;
+    const totalASW = head + ribs + ham + offals;
+    const slaughterLoss = animalWeight > 0 ? (animalWeight - totalASW) : 0;
+    const carcassWaste = head + offals;
+    const totalWastage = slaughterLoss + carcassWaste;
+    const wastagePercent = animalWeight > 0 ? Number(((totalWastage / animalWeight) * 100).toFixed(2)) : 0;
+    const usableMeat = totalASW - carcassWaste;
+
+    updateData.totalWeight = totalASW;
     updateData.usableMeat = usableMeat;
     updateData.wastagePercent = wastagePercent;
   }
@@ -71,6 +75,21 @@ const updateBatch = async (req, res) => {
     runValidators: true,
   });
   
+  if (batch && batch.pkgItems) {
+    const pkgItems = batch.pkgItems;
+    await CentralInventory.findOneAndUpdate(
+      { batchId: req.params.id },
+      {
+        bone: pkgItems.bone || 0,
+        boneless: pkgItems.boneless || 0,
+        mixed: pkgItems.mixed || 0,
+        totalWeight: (pkgItems.bone || 0) + 
+                     (pkgItems.boneless || 0) + 
+                     (pkgItems.mixed || 0),
+      }
+    );
+  }
+
   res.json({ success: true, data: batch });
 };
 
