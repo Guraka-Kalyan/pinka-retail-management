@@ -62,6 +62,7 @@ export default function Sales() {
   };
 
   const [isCounterCashOpen, setIsCounterCashOpen] = useState(false);
+  const [counterDate, setCounterDate] = useState(new Date().toISOString().split("T")[0]);
   const [counterCashInput, setCounterCashInput] = useState("");
   
   const [counterCashVal, setCounterCashVal] = useState(0);
@@ -106,7 +107,7 @@ export default function Sales() {
     }
     try {
       await api.post(`/shops/${selectedShop}/counter-cash`, {
-        date: todayStr,
+        date: counterDate,
         openingCash: Number(counterCashInput)
       });
       toast({ title: "Success", description: "Counter Cash saved." });
@@ -123,6 +124,7 @@ export default function Sales() {
       toast({ title: "Error", description: "Please select a specific shop from the dropdown first to set Opening Cash.", variant: "destructive" });
       return;
     }
+    setCounterDate(new Date().toISOString().split("T")[0]);
     setCounterCashInput(counterCashVal.toString());
     setIsCounterCashOpen(true);
   };
@@ -211,6 +213,15 @@ export default function Sales() {
               <p className="text-sm text-muted-foreground mt-1">Set opening cash for <span className="font-bold text-foreground">{selectedShopName}</span> — {todayStr}</p>
             </DialogHeader>
             <div className="grid gap-6 py-4">
+              <div className="space-y-2">
+                <Label>Date</Label>
+                <Input
+                  type="date"
+                  className="h-11 bg-card border-zinc-200 font-bold"
+                  value={counterDate}
+                  onChange={(e) => setCounterDate(e.target.value)}
+                />
+              </div>
               <div className="space-y-2">
                 <Label>Opening Cash (₹)</Label>
                 <div className="relative">

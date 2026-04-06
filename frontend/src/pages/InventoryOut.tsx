@@ -140,6 +140,8 @@ export default function InventoryOut({
   const remainingBalance = grandTotalAmt - paymentTotalInitial;
 
   const todayStr = new Date().toISOString().split("T")[0];
+  const [salesDate, setSalesDate] = useState(todayStr);
+
   const todayRecords = records.filter(r => r.date === todayStr);
   const todayCash = todayRecords.reduce((s, r) => s + r.cash, 0);
   const todayPhonePe = todayRecords.reduce((s, r) => s + r.phonePe, 0);
@@ -219,7 +221,7 @@ export default function InventoryOut({
       return;
     }
     const payload = {
-      date: todayStr,
+      date: salesDate,
       boneSold: Number(boneSold) || 0,
       bonelessSold: Number(bonelessSold) || 0,
       frySold: Number(frySold) || 0,
@@ -405,6 +407,16 @@ export default function InventoryOut({
           <h2 className="text-xl font-black text-foreground tracking-tight uppercase">Daily Entry Form</h2>
         </div>
         <div className="p-6">
+          <div className="mb-10 p-5 bg-[var(--table-row-2)] rounded-sm border border-border w-full sm:max-w-sm">
+            <Label className="text-lg font-bold text-muted-foreground block mb-2">Date</Label>
+            <Input 
+              type="date" 
+              value={salesDate} 
+              onChange={(e) => setSalesDate(e.target.value)} 
+              className="h-[56px] text-xl font-bold border-2 focus-visible:ring-primary focus-visible:border-primary px-4 shadow-none bg-background"
+            />
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
 
             {/* Section B */}
