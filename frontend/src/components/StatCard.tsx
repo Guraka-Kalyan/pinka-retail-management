@@ -30,14 +30,14 @@ const dotMap = {
 
 export default function StatCard({ title, value, icon, color = "default", subtitle, className }: StatCardProps) {
   return (
-    <div className={cn("rounded-sm border border-border bg-card p-6 shadow-none transition-all relative overflow-hidden group hover:bg-card-hover", className)}>
-      <div className="flex items-start justify-between gap-4">
+    <div className={cn("rounded-sm border border-border bg-card p-3 sm:p-6 shadow-none transition-all relative overflow-hidden group hover:bg-card-hover", className)}>
+      <div className="flex items-start justify-between gap-2 sm:gap-4">
         <div className="space-y-1 flex-1">
           <div className="flex items-center gap-2 mb-1">
-            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">{title}</p>
+            <p className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-wider line-clamp-2 leading-tight">{title}</p>
           </div>
-          <p className={cn("text-2xl font-black text-foreground tracking-tight")}>{value}</p>
-          {subtitle && <p className="text-xs text-muted-foreground font-medium mt-1">{subtitle}</p>}
+          <p className={cn("text-xl sm:text-2xl font-black text-foreground tracking-tight")}>{value}</p>
+          {subtitle && <p className="text-[10px] sm:text-xs text-muted-foreground font-medium mt-1">{subtitle}</p>}
         </div>
         {icon && (
           <div className={cn("p-2.5 rounded-sm bg-secondary/50 border shadow-none transition-transform", colorMap[color])}>

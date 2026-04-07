@@ -142,9 +142,9 @@ export default function Sales() {
       </div>
 
       {/* FILTER BAR */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-6 w-full">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 mb-4 sm:mb-6 w-full">
         {/* Shop Selector */}
-        <div className="flex items-center gap-3 bg-card px-3 py-1.5 rounded-sm border border-[var(--border)] shadow-none h-11 w-full sm:w-auto hover:border-slate-300 transition-all">
+        <div className="flex items-center gap-3 bg-card px-3 py-1.5 rounded-sm border border-[var(--border)] shadow-none h-[40px] sm:h-11 w-full sm:w-auto hover:border-slate-300 transition-all">
           <Store className="w-5 h-5 text-primary shrink-0" />
           <Select value={selectedShop} onValueChange={setSelectedShop}>
             <SelectTrigger className="w-full sm:w-[220px] border-0 bg-transparent p-0 h-auto focus:ring-0 shadow-none font-bold text-sm text-foreground">
@@ -161,8 +161,8 @@ export default function Sales() {
         {/* Daily Costs Button */}
         <Dialog>
           <DialogTrigger asChild>
-            <Button variant="outline" className="h-11 rounded-sm bg-card border-[var(--border)] shadow-none transition-all hover:text-primary hover:border-primary/30 font-bold w-full sm:w-auto" style={{color: 'var(--text-primary)'}}>
-              <Settings2 className="w-4 h-4 mr-2" />
+            <Button variant="outline" className="h-[40px] sm:h-11 rounded-sm bg-card border-[var(--border)] shadow-none transition-all hover:text-primary hover:border-primary/30 font-bold w-full sm:w-auto px-3 sm:px-4 text-xs sm:text-sm" style={{color: 'var(--text-primary)'}}>
+              <Settings2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-2" />
               Daily Costs
             </Button>
           </DialogTrigger>
@@ -202,8 +202,8 @@ export default function Sales() {
         {/* Counter Cash Button */}
         <Dialog open={isCounterCashOpen} onOpenChange={setIsCounterCashOpen}>
           <DialogTrigger asChild>
-            <Button onClick={(e) => { e.preventDefault(); openCounterCashModal(); }} variant="outline" className="h-11 rounded-sm bg-card border-[var(--border)] shadow-none transition-all hover:text-primary hover:border-primary/30 font-bold w-full sm:w-auto" style={{color: 'var(--text-primary)'}}>
-              <Wallet className="w-4 h-4 mr-2" />
+            <Button onClick={(e) => { e.preventDefault(); openCounterCashModal(); }} variant="outline" className="h-[40px] sm:h-11 rounded-sm bg-card border-[var(--border)] shadow-none transition-all hover:text-primary hover:border-primary/30 font-bold w-full sm:w-auto px-3 sm:px-4 text-xs sm:text-sm" style={{color: 'var(--text-primary)'}}>
+              <Wallet className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-2" />
               Counter Cash
             </Button>
           </DialogTrigger>
@@ -253,23 +253,23 @@ export default function Sales() {
       ) : (
         <>
           {/* SUMMARY STRIP */}
-          <div className="bg-card w-full rounded-sm border border-[var(--border)] mb-6 px-6 py-4 shadow-none">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full text-sm font-semibold">
+          <div className="bg-card w-full rounded-sm border border-[var(--border)] mb-4 sm:mb-6 px-4 py-3 sm:px-6 sm:py-4 shadow-none">
+            <div className="grid grid-cols-3 sm:grid-cols-3 gap-2 sm:gap-6 w-full text-sm font-semibold">
               <div className="flex flex-col">
-                <span className="text-xs uppercase tracking-wider text-muted-foreground/80 mb-1">Opening Cash</span>
+                <span className="text-[10px] sm:text-xs uppercase tracking-wider text-muted-foreground/80 mb-0.5 sm:mb-1">Opening Cash</span>
                 {hasOpeningCash ? (
-                  <span className="text-lg text-foreground font-bold">₹{counterCashVal.toLocaleString()}</span>
+                  <span className="text-sm sm:text-lg text-foreground font-bold leading-tight">₹{counterCashVal.toLocaleString()}</span>
                 ) : (
-                  <Button variant="link" onClick={openCounterCashModal} className="p-0 h-auto text-primary font-bold justify-start">Set Opening Cash</Button>
+                  <Button variant="link" onClick={openCounterCashModal} className="p-0 h-auto text-[10px] sm:text-sm text-primary font-bold justify-start leading-tight">Set Opening Cash</Button>
                 )}
               </div>
               <div className="flex flex-col">
-                <span className="text-xs uppercase tracking-wider text-muted-foreground/80 mb-1">Sales</span>
-                <span className="text-lg text-foreground font-bold">₹{todayCashSales.toLocaleString()}</span>
+                <span className="text-[10px] sm:text-xs uppercase tracking-wider text-muted-foreground/80 mb-0.5 sm:mb-1">Sales</span>
+                <span className="text-sm sm:text-lg text-foreground font-bold leading-tight">₹{todayCashSales.toLocaleString()}</span>
               </div>
-              <div className="flex flex-col">
-                <span className="text-xs uppercase tracking-wider text-muted-foreground/80 mb-1">Counter Total</span>
-                <span className="text-lg text-foreground font-black text-primary">₹{(counterCashVal + todayCashSales).toLocaleString()}</span>
+              <div className="flex flex-col border-l pl-2 sm:border-0 sm:pl-0">
+                <span className="text-[10px] sm:text-xs uppercase tracking-wider text-muted-foreground/80 mb-0.5 sm:mb-1">Counter Total</span>
+                <span className="text-sm sm:text-lg text-foreground font-black text-primary leading-tight">₹{(counterCashVal + todayCashSales).toLocaleString()}</span>
               </div>
             </div>
           </div>
