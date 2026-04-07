@@ -33,11 +33,11 @@ const createSupply = async (req, res) => {
     return res.status(400).json({ success: false, message: 'batch and date are required' });
   }
 
-  const nBone     = Number(bone)     || 0;
+  const nBone = Number(bone) || 0;
   const nBoneless = Number(boneless) || 0;
-  const nMixed    = Number(mixed)    || 0;
-  const nExtra    = Number(extra)    || 0;
-  const total     = nBone + nBoneless + nMixed;
+  const nMixed = Number(mixed) || 0;
+  const nExtra = Number(extra) || 0;
+  const total = nBone + nBoneless + nMixed;
 
   if (total === 0) {
     return res.status(400).json({ success: false, message: 'Enter at least one quantity to supply' });
@@ -56,7 +56,7 @@ const createSupply = async (req, res) => {
         success: false,
         message: 'Insufficient stock',
         available: { bone: invItem.bone, boneless: invItem.boneless, mixed: invItem.mixed },
-        required:  { bone: nBone,       boneless: nBoneless,        mixed: nMixed       },
+        required: { bone: nBone, boneless: nBoneless, mixed: nMixed },
         canOverride: true,
       });
     }
@@ -66,25 +66,25 @@ const createSupply = async (req, res) => {
   const prices = await getPrices(shopId);
 
   // Deduct from central inventory
-  invItem.bone     = Math.max(0, invItem.bone     - nBone);
+  invItem.bone = Math.max(0, invItem.bone - nBone);
   invItem.boneless = Math.max(0, invItem.boneless - nBoneless);
-  invItem.mixed    = Math.max(0, invItem.mixed    - nMixed);
+  invItem.mixed = Math.max(0, invItem.mixed - nMixed);
   invItem.totalWeight = invItem.bone + invItem.boneless + invItem.mixed;
 
   // Recalculate remaining inventory value using dynamic prices
   invItem.totalAmount =
-    invItem.bone     * prices.bone     +
+    invItem.bone * prices.bone +
     invItem.boneless * prices.boneless +
-    invItem.mixed    * prices.mixed;
+    invItem.mixed * prices.mixed;
 
   invItem.status = invItem.totalWeight > 0 ? 'Available' : 'Empty';
   await invItem.save();
 
   // Calculate supply total amount using dynamic prices
   const calculatedAmount =
-    (nBone     * prices.bone)     +
+    (nBone * prices.bone) +
     (nBoneless * prices.boneless) +
-    (nMixed    * prices.mixed);
+    (nMixed * prices.mixed);
   const totalAmount = calculatedAmount + nExtra;
 
   // Create supply record
@@ -106,15 +106,15 @@ const createSupply = async (req, res) => {
   if (shopId) {
     await ShopInventory.create({
       shopId,
-      supplyId:    supply._id,
+      supplyId: supply._id,
       batch,
-      transport:   'Internal Supply',
-      bone:        nBone,
-      boneless:    nBoneless,
-      mixed:       nMixed,
-      skin:        0,
-      meat:        0,
-      rate:        0,
+      transport: 'Internal Supply',
+      bone: nBone,
+      boneless: nBoneless,
+      mixed: nMixed,
+      skin: 0,
+      meat: 0,
+      rate: 0,
       totalWeight: total,
       totalAmount,
       date,
@@ -151,17 +151,17 @@ const deleteSupply = async (req, res) => {
     invItem.bone += (supply.bone || 0);
     invItem.boneless += (supply.boneless || 0);
     invItem.mixed += (supply.mixed || 0);
-    
+
     invItem.totalWeight = invItem.bone + invItem.boneless + invItem.mixed;
-    
+
     // Fetch dynamic prices to calculate new total amount
     const prices = await getPrices(supply.shopId);
-    
+
     // Recalculate remaining inventory value using dynamic prices
     invItem.totalAmount =
-      invItem.bone     * prices.bone     +
+      invItem.bone * prices.bone +
       invItem.boneless * prices.boneless +
-      invItem.mixed    * prices.mixed;
+      invItem.mixed * prices.mixed;
 
     invItem.status = invItem.totalWeight > 0 ? 'Available' : 'Empty';
     await invItem.save();
