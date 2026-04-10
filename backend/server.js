@@ -38,8 +38,8 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
-  credentials: true,
+  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : 'http://localhost:5173',
+  credentials: true
 }));
 
 // ─── Body Parser ──────────────────────────────────────────────────────────────
