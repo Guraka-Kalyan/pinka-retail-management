@@ -256,7 +256,7 @@ export default function Dashboard() {
 
     const waterfall = [
       { name: "Raw Cost",    value: rawCost,   type: "cost",                          fullLabel: "Total Raw Cost" },
-      { name: "Supply",      value: extSupply, type: "cost",                          fullLabel: "External Supply" },
+      { name: "Extras",      value: extSupply, type: "cost",                          fullLabel: "External Supply" },
       { name: "Operational", value: opCost,    type: "cost",                          fullLabel: "Operational Cost" },
       { name: "Discount",    value: discount,  type: "cost",                          fullLabel: "Discount Given" },
       { name: "Selling Price", value: selling, type: "revenue",                       fullLabel: "Total Sales Revenue" },
