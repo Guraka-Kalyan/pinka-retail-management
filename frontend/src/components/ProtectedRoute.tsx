@@ -3,9 +3,10 @@ import { Navigate, Outlet } from "react-router-dom";
 import api from "@/lib/api";
 import { Loader2 } from "lucide-react";
 
-export default function ProtectedRoute() {
+export default function ProtectedRoute({ allowedRoles }: { allowedRoles?: string[] }) {
   const [isValidating, setIsValidating] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   useEffect(() => {
     const validateToken = async () => {
@@ -21,6 +22,7 @@ export default function ProtectedRoute() {
         const response = await api.get("/auth/me");
         if (response.data && response.data.success) {
           setIsAuthenticated(true);
+          setUserRole(response.data.user.role || null);
         } else {
           throw new Error("Invalid token response");
         }
@@ -45,5 +47,16 @@ export default function ProtectedRoute() {
     );
   }
 
-  return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />;
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (allowedRoles && userRole && !allowedRoles.includes(userRole)) {
+    if (userRole === "shopstaff") {
+      return <Navigate to="/daily" replace />;
+    }
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <Outlet />;
 }

@@ -10,8 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import api from "@/lib/api";
 
-export default function Sales() {
+export default function Sales({ isDailyMode = false }: { isDailyMode?: boolean }) {
   const { toast } = useToast();
+  const [isCostsOpen, setIsCostsOpen] = useState(false);
   const [selectedShop, setSelectedShop] = useState("");
   const [shopsList, setShopsList] = useState<{id: string, name: string}[]>([]);
   const todayStr = new Date().toISOString().split("T")[0];
@@ -21,6 +22,18 @@ export default function Sales() {
       const res = await api.get("/shops");
       const mapped = res.data.data.map((s: any) => ({ id: s._id, name: s.name }));
       setShopsList(mapped);
+
+      if (isDailyMode) {
+        const userStr = localStorage.getItem("pinaka_user");
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          if (user.assignedShop) {
+            setSelectedShop(user.assignedShop);
+          } else if (mapped.length > 0) {
+            setSelectedShop(mapped[0].id);
+          }
+        }
+      }
     } catch {
       toast({ title: "Error", description: "Failed to load shops.", variant: "destructive" });
     }
@@ -60,6 +73,7 @@ export default function Sales() {
       }
       await api.put("/settings/selling-costs", { ...sellingCosts, shopId: selectedShop });
       toast({ title: "Success", description: "Selling costs updated successfully! New prices will apply to Sales." });
+      setIsCostsOpen(false);
     } catch (err) {
       console.error(err);
       toast({ title: "Error", description: "Failed to update selling costs", variant: "destructive" });
@@ -212,47 +226,12 @@ export default function Sales() {
         </div>
 
         {/* Daily Costs Button */}
-        <Dialog>
-          <DialogTrigger asChild>
-            <span title={!selectedShop || selectedShop === "global" ? "Select a shop first" : ""}>
-              <Button disabled={!selectedShop || selectedShop === "global"} variant="outline" className="h-[40px] sm:h-11 rounded-sm bg-card border-[var(--border)] shadow-none transition-all hover:text-primary hover:border-primary/30 font-bold w-full sm:w-auto px-3 sm:px-4 text-xs sm:text-sm" style={{color: 'var(--text-primary)'}}>
-                <Settings2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-2" />
-                Daily Costs
-              </Button>
-            </span>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Daily Selling Costs</DialogTitle>
-            </DialogHeader>
-            <div className="grid gap-6">
-              <p className="text-sm text-muted-foreground">Configure exactly how much each item cuts and mixes should cost today.</p>
-              {["fry", "curry", "bone", "boneless", "mixed"].map((cut) => (
-                <div key={cut} className="flex items-center justify-between gap-4 border-b border-secondary pb-4 last:border-0 last:pb-0">
-                  <label className="font-bold text-sm tracking-wide text-muted-foreground w-24 uppercase">{cut}</label>
-                  <div className="relative flex-1">
-                    <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      type="number"
-                      placeholder="0.00"
-                      className="pl-9 h-11 bg-card border-zinc-200 font-bold"
-                      value={sellingCosts[cut] || 0}
-                      onChange={(e) => setSellingCosts(prev => ({...prev, [cut]: Number(e.target.value)}))}
-                    />
-                  </div>
-                </div>
-              ))}
-              <div className="pt-2">
-                <Button
-                  onClick={handleSaveCosts}
-                  className="w-full bg-primary hover:bg-primary/80 text-white h-12 shadow-none font-bold tracking-widest uppercase rounded-sm"
-                >
-                  Save Costs
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <span title={!selectedShop || selectedShop === "global" ? "Select a shop first" : ""}>
+          <Button disabled={!selectedShop || selectedShop === "global"} onClick={(e) => { e.preventDefault(); setIsCostsOpen(true); }} variant="outline" className="h-[40px] sm:h-11 rounded-sm bg-card border-[var(--border)] shadow-none transition-all hover:text-primary hover:border-primary/30 font-bold w-full sm:w-auto px-3 sm:px-4 text-xs sm:text-sm" style={{color: 'var(--text-primary)'}}>
+            <Settings2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-2" />
+            Daily Costs
+          </Button>
+        </span>
 
         {/* Counter Cash Button */}
         <Dialog open={isCounterCashOpen} onOpenChange={setIsCounterCashOpen}>

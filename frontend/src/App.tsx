@@ -17,6 +17,7 @@ import ShopDashboard from "@/pages/ShopDashboard";
 import NotFound from "@/pages/NotFound";
 import Login from "@/pages/Login";
 import Profile from "@/pages/Profile";
+import Daily from "@/pages/Daily";
 
 const queryClient = new QueryClient();
 
@@ -32,7 +33,11 @@ const App = () => (
             <Route path="/login" element={<Login />} />
 
             {/* Protected routes — requires JWT token in localStorage */}
-            <Route element={<ProtectedRoute />}>
+            <Route element={<ProtectedRoute allowedRoles={['shopstaff']} />}>
+              <Route path="/daily" element={<Daily />} />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRoles={['Admin', 'Staff']} />}>
               <Route element={<Layout />}>
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/dressing" element={<Dressing />} />

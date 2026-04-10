@@ -306,6 +306,7 @@ export default function Profile() {
                   <SelectContent>
                     <SelectItem value="Admin">Admin</SelectItem>
                     <SelectItem value="Staff">Staff</SelectItem>
+                    <SelectItem value="shopstaff">Shop Staff</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

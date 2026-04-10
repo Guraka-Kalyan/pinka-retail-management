@@ -15,13 +15,17 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['Admin', 'Staff'],
+    enum: ['Admin', 'Staff', 'shopstaff'],
     default: 'Staff',
   },
   passwordHash: {
     type: String,
     required: [true, 'Password is required'],
   },
+  assignedShop: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Shop',
+  }
 }, { timestamps: true });
 
 // Hash password before saving
