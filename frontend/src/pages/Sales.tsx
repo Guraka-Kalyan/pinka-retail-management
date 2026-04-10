@@ -92,6 +92,7 @@ export default function Sales({ isDailyMode = false }: { isDailyMode?: boolean }
 
   const [isPrepOpen, setIsPrepOpen] = useState(false);
   const [prepDate, setPrepDate] = useState(todayStr);
+  const [stockError, setStockError] = useState<{item: string, available: number, requested: number, field: string} | null>(null);
   const [isSalesModalOpen, setIsSalesModalOpen] = useState(false);
   const [boneFry, setBoneFry] = useState("");
   const [bonelessFry, setBonelessFry] = useState("");
@@ -118,6 +119,26 @@ export default function Sales({ isDailyMode = false }: { isDailyMode?: boolean }
       return;
     }
     try {
+      const stockRes = await api.get(`/shops/${selectedShop}/stock`);
+      const stock = stockRes.data.data;
+      
+      const bFry = Number(boneFry) || 0;
+      const bCurry = Number(boneCurry) || 0;
+      const reqBone = bFry + bCurry;
+      
+      const blFry = Number(bonelessFry) || 0;
+      const blCurry = Number(bonelessCurry) || 0;
+      const reqBoneless = blFry + blCurry;
+
+      if (reqBone > stock.boneStock) {
+        setStockError({ item: "Bone", available: stock.boneStock, requested: reqBone, field: "Bone" });
+        return;
+      }
+      if (reqBoneless > stock.bonelessStock) {
+        setStockError({ item: "Boneless", available: stock.bonelessStock, requested: reqBoneless, field: "Boneless" });
+        return;
+      }
+
       await api.post(`/shops/${selectedShop}/preparations`, {
         date: prepDate,
         boneFry: Number(boneFry) || 0,
@@ -415,6 +436,39 @@ export default function Sales({ isDailyMode = false }: { isDailyMode?: boolean }
           </div>
         </>
       )}
+
+      {/* Stock Error Modal */}
+      <Dialog open={!!stockError} onOpenChange={(open) => !open && setStockError(null)}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-destructive flex items-center gap-2">
+              ⚠️ Insufficient Stock
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-4">
+            <p className="text-foreground text-base">Not enough <strong className="text-primary">{stockError?.item}</strong> stock available.</p>
+            <div className="bg-muted p-4 rounded-md space-y-2 border">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground font-semibold">Available:</span>
+                <span className="font-bold text-lg">{stockError?.available.toFixed(2)} <span className="text-xs">kg</span></span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground font-semibold">Requested:</span>
+                <span className="text-destructive font-bold text-lg">{stockError?.requested.toFixed(2)} <span className="text-xs">kg</span></span>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">Please adjust the quantity to continue.</p>
+          </div>
+          <DialogFooter className="mt-2">
+            <Button 
+              className="w-full bg-[#FF6B00] hover:bg-[#FF6B00]/90 text-white font-bold h-12 text-lg"
+              onClick={() => setStockError(null)}
+            >
+              Fix Quantity
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
