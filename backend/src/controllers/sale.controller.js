@@ -1,6 +1,7 @@
 const Sale = require('../models/Sale.model');
 const PDFDocument = require('pdfkit');
 const Shop = require('../models/Shop.model');
+const { getLiveStock } = require('./shop.controller');
 
 // @desc   Get sales for a shop (with optional date filter)
 // @route  GET /api/shops/:shopId/sales
@@ -23,6 +24,21 @@ const getSales = async (req, res) => {
 const createSale = async (req, res) => {
   const { date, boneSold, bonelessSold, frySold, currySold, mixedSold, boneUsed, bonelessUsed, fry, curry, cash, phonePe, total, discountGiven } = req.body;
   if (!date) return res.status(400).json({ success: false, message: 'date is required' });
+
+  // Stock Validation
+  const stock = await getLiveStock(req.params.shopId);
+
+  const reqBone = Number(boneSold) || 0;
+  const reqBoneless = Number(bonelessSold) || 0;
+  const reqMixed = Number(mixedSold) || 0;
+  const reqFry = Number(frySold) || 0;
+  const reqCurry = Number(currySold) || 0;
+
+  if (reqBone > stock.boneStock) return res.status(400).json({ success: false, message: `Insufficient stock for Bone. Available: ${stock.boneStock.toFixed(2)} kg, Requested: ${reqBone} kg.`});
+  if (reqBoneless > stock.bonelessStock) return res.status(400).json({ success: false, message: `Insufficient stock for Boneless. Available: ${stock.bonelessStock.toFixed(2)} kg, Requested: ${reqBoneless} kg.`});
+  if (reqMixed > stock.mixedStock) return res.status(400).json({ success: false, message: `Insufficient stock for Mixed. Available: ${stock.mixedStock.toFixed(2)} kg, Requested: ${reqMixed} kg.`});
+  if (reqFry > stock.fryStock) return res.status(400).json({ success: false, message: `Insufficient stock for Fry. Available: ${stock.fryStock.toFixed(2)} kg, Requested: ${reqFry} kg.`});
+  if (reqCurry > stock.curryStock) return res.status(400).json({ success: false, message: `Insufficient stock for Curry. Available: ${stock.curryStock.toFixed(2)} kg, Requested: ${reqCurry} kg.`});
 
   // Auto-generate billId
   const count = await Sale.countDocuments({ shopId: req.params.shopId });

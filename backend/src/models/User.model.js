@@ -8,6 +8,16 @@ const userSchema = new mongoose.Schema({
     trim: true,
     unique: true,
   },
+  username: {
+    type: String,
+    trim: true,
+    default: '',
+  },
+  role: {
+    type: String,
+    enum: ['Admin', 'Staff'],
+    default: 'Staff',
+  },
   passwordHash: {
     type: String,
     required: [true, 'Password is required'],

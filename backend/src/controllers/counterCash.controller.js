@@ -34,15 +34,19 @@ const getCounterCash = async (req, res) => {
 // @desc   Set or update opening cash for a shop on a date
 // @route  POST /api/shops/:shopId/counter-cash
 const setCounterCash = async (req, res) => {
-  const { date, openingCash } = req.body;
-  if (!date || openingCash === undefined) {
-    return res.status(400).json({ success: false, message: 'date and openingCash are required' });
+  const { date, openingCash, finalCash } = req.body;
+  if (!date) {
+    return res.status(400).json({ success: false, message: 'date is required' });
   }
+
+  const updatePayload = { shopId: req.params.shopId, date };
+  if (openingCash !== undefined) updatePayload.openingCash = Number(openingCash);
+  if (finalCash !== undefined) updatePayload.finalCash = Number(finalCash);
 
   // Upsert: one record per shop per day
   const record = await CounterCash.findOneAndUpdate(
     { shopId: req.params.shopId, date },
-    { shopId: req.params.shopId, date, openingCash: Number(openingCash) },
+    { $set: updatePayload },
     { upsert: true, new: true }
   );
 

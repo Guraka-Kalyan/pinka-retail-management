@@ -42,9 +42,33 @@ const getCentralInventoryItem = async (req, res) => {
 };
 
 // @desc   Update central inventory (e.g. manual stock correction)
-// @route  PUT /api/central-inventory/:id
 const updateCentralInventory = async (req, res) => {
-  const item = await CentralInventory.findByIdAndUpdate(req.params.id, req.body, {
+  const { bone, boneless, mixed } = req.body;
+  
+  let totalWeight = 0;
+  let totalAmount = 0;
+  
+  if (bone) {
+    totalWeight += Number(bone.qty) || 0;
+    totalAmount += (Number(bone.qty) || 0) * (Number(bone.pricePerKg) || 0);
+  }
+  if (boneless) {
+    totalWeight += Number(boneless.qty) || 0;
+    totalAmount += (Number(boneless.qty) || 0) * (Number(boneless.pricePerKg) || 0);
+  }
+  if (mixed) {
+    totalWeight += Number(mixed.qty) || 0;
+    totalAmount += (Number(mixed.qty) || 0) * (Number(mixed.pricePerKg) || 0);
+  }
+
+  const updatePayload = {
+    ...req.body,
+    totalWeight,
+    totalAmount,
+    status: totalWeight > 0 ? 'Available' : 'Empty',
+  };
+
+  const item = await CentralInventory.findByIdAndUpdate(req.params.id, updatePayload, {
     new: true,
     runValidators: true,
   });

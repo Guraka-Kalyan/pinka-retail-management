@@ -81,11 +81,11 @@ const getInventorySummary = async (req, res) => {
 
   // Central inventory summary
   const central = await CentralInventory.find();
-  const bone = central.reduce((s, r) => s + (r.bone || 0), 0);
-  const boneless = central.reduce((s, r) => s + (r.boneless || 0), 0);
-  const mixed = central.reduce((s, r) => s + (r.mixed || 0), 0);
-  const skin = central.reduce((s, r) => s + (r.skin || 0), 0);
-  const meat = central.reduce((s, r) => s + (r.meat || 0), 0);
+  const bone = central.reduce((s, r) => s + (r.bone?.qty || 0), 0);
+  const boneless = central.reduce((s, r) => s + (r.boneless?.qty || 0), 0);
+  const mixed = central.reduce((s, r) => s + (r.mixed?.qty || 0), 0);
+  const skin = central.reduce((s, r) => s + (r.skin?.qty || 0), 0);
+  const meat = central.reduce((s, r) => s + (r.meat?.qty || 0), 0);
   const totalValue = central.reduce((s, r) => s + (r.totalAmount || 0), 0);
 
   res.json({ success: true, data: { bone, boneless, mixed, skin, meat, totalValue } });

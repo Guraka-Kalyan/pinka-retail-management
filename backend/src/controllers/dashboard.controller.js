@@ -39,9 +39,9 @@ const getDashboardSummary = async (req, res) => {
   const monthCostTotal = monthCosts.reduce((s, r) => s + (r.total || 0), 0);
   const netProfit = monthRevenue - monthCostTotal;
 
-  const centralBone = centralInventory.reduce((s, r) => s + (r.bone || 0), 0);
-  const centralBoneless = centralInventory.reduce((s, r) => s + (r.boneless || 0), 0);
-  const centralMixed = centralInventory.reduce((s, r) => s + (r.mixed || 0), 0);
+  const centralBone = centralInventory.reduce((s, r) => s + (r.bone?.qty || 0), 0);
+  const centralBoneless = centralInventory.reduce((s, r) => s + (r.boneless?.qty || 0), 0);
+  const centralMixed = centralInventory.reduce((s, r) => s + (r.mixed?.qty || 0), 0);
   const centralTotalWeight = centralBone + centralBoneless + centralMixed;
   const isLowStock = centralTotalWeight < 5;
 

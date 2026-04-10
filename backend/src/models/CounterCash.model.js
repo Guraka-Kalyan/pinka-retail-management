@@ -8,6 +8,7 @@ const counterCashSchema = new mongoose.Schema({
   },
   date: { type: String, required: true },
   openingCash: { type: Number, required: true, default: 0 },
+  finalCash: { type: Number, default: 0 },
 }, { timestamps: true });
 
 // One record per shop per day

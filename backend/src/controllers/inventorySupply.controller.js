@@ -27,7 +27,7 @@ const getSupplies = async (req, res) => {
 // @desc   Create supply (deduct from central, create shop inventory)
 // @route  POST /api/supplies
 const createSupply = async (req, res) => {
-  const { shopId, batch, bone, boneless, mixed, extra, overrideFlag, date, externalRecipient } = req.body;
+  const { shopId, externalRecipient, batch, bone, boneless, mixed, extra, overrideFlag, date, bonePrice, bonelessPrice, mixedPrice } = req.body;
 
   if (!batch || !date) {
     return res.status(400).json({ success: false, message: 'batch and date are required' });
@@ -49,42 +49,48 @@ const createSupply = async (req, res) => {
     return res.status(404).json({ success: false, message: 'Batch not found in Central Inventory' });
   }
 
+  const totalSupply = nBone + nBoneless + nMixed;
+
   // Stock check
   if (!overrideFlag) {
-    if (invItem.bone < nBone || invItem.boneless < nBoneless || invItem.mixed < nMixed) {
+    if (totalSupply > (invItem.mixed?.qty || 0)) {
       return res.status(400).json({
         success: false,
-        message: 'Insufficient stock',
-        available: { bone: invItem.bone, boneless: invItem.boneless, mixed: invItem.mixed },
-        required: { bone: nBone, boneless: nBoneless, mixed: nMixed },
+        message: 'Insufficient stock in batch',
+        available: { mixed: invItem.mixed?.qty || 0 },
+        required: { total: totalSupply },
         canOverride: true,
       });
     }
   }
 
-  // Fetch dynamic prices for this shop (shop-specific → global → fallback)
-  const prices = await getPrices(shopId);
+  // Prices directly from CentralInventory
+  const prices = {
+    bone: invItem.bone?.pricePerKg || 0,
+    boneless: invItem.boneless?.pricePerKg || 0,
+    mixed: invItem.mixed?.pricePerKg || 0,
+  };
 
-  // Deduct from central inventory
-  invItem.bone = Math.max(0, invItem.bone - nBone);
-  invItem.boneless = Math.max(0, invItem.boneless - nBoneless);
-  invItem.mixed = Math.max(0, invItem.mixed - nMixed);
-  invItem.totalWeight = invItem.bone + invItem.boneless + invItem.mixed;
+  // Deduct from central inventory's single tracking pool (mixed)
+  if (invItem.mixed) {
+    invItem.mixed.qty = Math.max(0, (invItem.mixed.qty || 0) - totalSupply);
+  }
+  invItem.totalWeight = (invItem.bone?.qty || 0) + (invItem.boneless?.qty || 0) + (invItem.mixed?.qty || 0);
 
-  // Recalculate remaining inventory value using dynamic prices
+  // Recalculate remaining inventory value using central prices
   invItem.totalAmount =
-    invItem.bone * prices.bone +
-    invItem.boneless * prices.boneless +
-    invItem.mixed * prices.mixed;
+    (invItem.bone?.qty || 0) * prices.bone +
+    (invItem.boneless?.qty || 0) * prices.boneless +
+    (invItem.mixed?.qty || 0) * prices.mixed;
 
   invItem.status = invItem.totalWeight > 0 ? 'Available' : 'Empty';
   await invItem.save();
 
-  // Calculate supply total amount using dynamic prices
+  // Re-calculate the new total using updated prices from frontend
   const calculatedAmount =
-    (nBone * prices.bone) +
-    (nBoneless * prices.boneless) +
-    (nMixed * prices.mixed);
+    (nBone * (Number(bonePrice) || 0)) +
+    (nBoneless * (Number(bonelessPrice) || 0)) +
+    (nMixed * (Number(mixedPrice) || 0));
   const totalAmount = calculatedAmount + nExtra;
 
   // Create supply record
@@ -95,8 +101,11 @@ const createSupply = async (req, res) => {
     bone: nBone,
     boneless: nBoneless,
     mixed: nMixed,
+    bonePrice: Number(bonePrice) || 0,
+    bonelessPrice: Number(bonelessPrice) || 0,
+    mixedPrice: Number(mixedPrice) || 0,
     extra: nExtra,
-    total,
+    total: totalAmount,
     totalAmount,
     overrideFlag: !!overrideFlag,
     date,
@@ -127,11 +136,73 @@ const createSupply = async (req, res) => {
 // @desc   Update supply record
 // @route  PUT /api/supplies/:id
 const updateSupply = async (req, res) => {
+  const { shopId, externalRecipient, batch, bone, boneless, mixed, extra, date, bonePrice, bonelessPrice, mixedPrice } = req.body;
+
+  const oldSupply = await InventorySupply.findById(req.params.id);
+  if (!oldSupply) return res.status(404).json({ success: false, message: 'Supply record not found' });
+
+  const nBone = Number(req.body.bone) || 0;
+  const nBoneless = Number(req.body.boneless) || 0;
+  const nMixed = Number(req.body.mixed) || 0;
+
+  const deltaBone = nBone - (oldSupply.bone || 0);
+  const deltaBoneless = nBoneless - (oldSupply.boneless || 0);
+  const deltaMixed = nMixed - (oldSupply.mixed || 0);
+  const deltaTotal = deltaBone + deltaBoneless + deltaMixed;
+
+  const invItem = await CentralInventory.findOne({ batchNo: oldSupply.batch });
+  if (invItem && !req.body.overrideFlag) {
+    if ((invItem.mixed?.qty || 0) - deltaTotal < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Insufficient stock in Inventory In to cover this update.',
+        available: { mixed: invItem.mixed?.qty || 0 },
+        requiredDelta: { total: deltaTotal },
+        canOverride: true
+      });
+    }
+  }
+
   const supply = await InventorySupply.findByIdAndUpdate(req.params.id, req.body, {
     new: true,
     runValidators: true,
   });
-  if (!supply) return res.status(404).json({ success: false, message: 'Supply record not found' });
+
+  if (supply.shopId) {
+    const shopInv = await ShopInventory.findOne({ supplyId: supply._id });
+    if (shopInv) {
+      shopInv.bone += deltaBone;
+      shopInv.boneless += deltaBoneless;
+      shopInv.mixed += deltaMixed;
+      shopInv.totalWeight = shopInv.bone + shopInv.boneless + shopInv.mixed;
+      if (req.body.totalAmount !== undefined) {
+        shopInv.totalAmount = req.body.totalAmount;
+      }
+      await shopInv.save();
+    }
+  }
+
+  if (invItem) {
+    if (invItem.mixed) {
+      invItem.mixed.qty = Math.max(0, (invItem.mixed.qty || 0) - deltaTotal);
+    }
+    invItem.totalWeight = (invItem.bone?.qty || 0) + (invItem.boneless?.qty || 0) + (invItem.mixed?.qty || 0);
+
+    const prices = {
+      bone: invItem.bone?.pricePerKg || 0,
+      boneless: invItem.boneless?.pricePerKg || 0,
+      mixed: invItem.mixed?.pricePerKg || 0,
+    };
+    
+    invItem.totalAmount =
+      (invItem.bone?.qty || 0) * prices.bone +
+      (invItem.boneless?.qty || 0) * prices.boneless +
+      (invItem.mixed?.qty || 0) * prices.mixed;
+
+    invItem.status = invItem.totalWeight > 0 ? 'Available' : 'Empty';
+    await invItem.save();
+  }
+
   res.json({ success: true, data: supply });
 };
 
@@ -145,23 +216,25 @@ const deleteSupply = async (req, res) => {
     await ShopInventory.findOneAndDelete({ supplyId: supply._id });
   }
 
-  // Restore the stock to CentralInventory
+  // Restore the stock to CentralInventory (single pool)
   const invItem = await CentralInventory.findOne({ batchNo: supply.batch });
   if (invItem) {
-    invItem.bone += (supply.bone || 0);
-    invItem.boneless += (supply.boneless || 0);
-    invItem.mixed += (supply.mixed || 0);
+    const supplyTotal = (supply.bone || 0) + (supply.boneless || 0) + (supply.mixed || 0);
+    if (invItem.mixed) invItem.mixed.qty += supplyTotal;
 
-    invItem.totalWeight = invItem.bone + invItem.boneless + invItem.mixed;
+    invItem.totalWeight = (invItem.bone?.qty || 0) + (invItem.boneless?.qty || 0) + (invItem.mixed?.qty || 0);
 
-    // Fetch dynamic prices to calculate new total amount
-    const prices = await getPrices(supply.shopId);
+    const prices = {
+      bone: invItem.bone?.pricePerKg || 0,
+      boneless: invItem.boneless?.pricePerKg || 0,
+      mixed: invItem.mixed?.pricePerKg || 0,
+    };
 
-    // Recalculate remaining inventory value using dynamic prices
+    // Recalculate remaining inventory value using central prices
     invItem.totalAmount =
-      invItem.bone * prices.bone +
-      invItem.boneless * prices.boneless +
-      invItem.mixed * prices.mixed;
+      (invItem.bone?.qty || 0) * prices.bone +
+      (invItem.boneless?.qty || 0) * prices.boneless +
+      (invItem.mixed?.qty || 0) * prices.mixed;
 
     invItem.status = invItem.totalWeight > 0 ? 'Available' : 'Empty';
     await invItem.save();

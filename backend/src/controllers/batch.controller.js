@@ -80,12 +80,12 @@ const updateBatch = async (req, res) => {
     await CentralInventory.findOneAndUpdate(
       { batchId: req.params.id },
       {
-        bone: pkgItems.bone || 0,
-        boneless: pkgItems.boneless || 0,
-        mixed: pkgItems.mixed || 0,
-        totalWeight: (pkgItems.bone || 0) + 
-                     (pkgItems.boneless || 0) + 
-                     (pkgItems.mixed || 0),
+        'bone.qty': pkgItems.bone?.qty || 0,
+        'boneless.qty': pkgItems.boneless?.qty || 0,
+        'mixed.qty': pkgItems.mixed?.qty || 0,
+        totalWeight: (pkgItems.bone?.qty || 0) + 
+                     (pkgItems.boneless?.qty || 0) + 
+                     (pkgItems.mixed?.qty || 0),
       }
     );
   }
@@ -104,12 +104,8 @@ const packageBatch = async (req, res) => {
   const batch = await Batch.findById(req.params.id);
   if (!batch) return res.status(404).json({ success: false, message: 'Batch not found' });
 
-  const defaultPrices = { bone: 350, boneless: 400, mixed: 380 };
-  const totalWeight = (pkgItems.bone || 0) + (pkgItems.boneless || 0) + (pkgItems.mixed || 0);
-  const totalAmount =
-    (pkgItems.bone || 0) * defaultPrices.bone +
-    (pkgItems.boneless || 0) * defaultPrices.boneless +
-    (pkgItems.mixed || 0) * defaultPrices.mixed;
+  const totalWeight = pkgItems.mixed?.qty || 0;
+  const totalAmount = totalWeight * (pkgItems.mixed?.pricePerKg || 0);
 
   // Update batch status and pkgItems
   batch.pkgItems = pkgItems;
@@ -117,16 +113,16 @@ const packageBatch = async (req, res) => {
   await batch.save();
 
   // Upsert CentralInventory record
+  // Only insert the initial reference (mixed qty from dressing is brought over initially but admin can edit it freely)
   const invData = {
     batchId: batch._id,
     batchNo: batch.batchNo,
     date: batch.date,
-    bone: pkgItems.bone || 0,
-    boneless: pkgItems.boneless || 0,
-    mixed: pkgItems.mixed || 0,
+    'mixed.qty': pkgItems.mixed?.qty || 0,
+    'mixed.pricePerKg': pkgItems.mixed?.pricePerKg || 0,
     totalWeight,
     totalAmount,
-    status: 'Available',
+    status: totalWeight > 0 ? 'Available' : 'Empty',
   };
 
   await CentralInventory.findOneAndUpdate(
