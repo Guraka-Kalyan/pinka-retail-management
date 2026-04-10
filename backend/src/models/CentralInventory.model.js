@@ -7,9 +7,18 @@ const centralInventorySchema = new mongoose.Schema({
     required: true,
   },
   batchNo: { type: String, required: true },
-  bone: { type: Number, default: 0 },
-  boneless: { type: Number, default: 0 },
-  mixed: { type: Number, default: 0 },
+  bone: { 
+    qty: { type: Number, default: 0 }, 
+    pricePerKg: { type: Number, default: 0 } 
+  },
+  boneless: { 
+    qty: { type: Number, default: 0 }, 
+    pricePerKg: { type: Number, default: 0 } 
+  },
+  mixed: { 
+    qty: { type: Number, default: 0 }, 
+    pricePerKg: { type: Number, default: 0 } 
+  },
   totalWeight: { type: Number, default: 0 },
   totalAmount: { type: Number, default: 0 },
   status: {

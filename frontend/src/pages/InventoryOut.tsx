@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Breadcrumb from "@/components/Breadcrumb";
 import DataTable from "@/components/DataTable";
 import StatCard from "@/components/StatCard";
@@ -65,12 +65,16 @@ export default function InventoryOut({
   shopIdFilter, 
   dateFilter = "Today", 
   customStart, 
-  customEnd 
+  customEnd,
+  salesModalOpen,
+  onSalesModalClose,
 }: { 
   shopIdFilter?: string; 
   dateFilter?: string; 
   customStart?: string; 
-  customEnd?: string; 
+  customEnd?: string;
+  salesModalOpen?: boolean;
+  onSalesModalClose?: () => void;
 }) {
   const params = useParams();
   const id = shopIdFilter || params.id;
@@ -86,23 +90,26 @@ export default function InventoryOut({
   const [invIn, setInvIn] = useState<InventoryInRecord[]>([]);
   const [preps, setPreps] = useState<PreparationRecord[]>([]);
   const [selectedBill, setSelectedBill] = useState<OutRecord | null>(null);
+  const [liveStock, setLiveStock] = useState<any>(null);
 
   const fetchData = async () => {
     if (!id) return;
     try {
       setIsLoading(true);
-        const [salesRes, invRes, prepRes, shopsRes, costsRes] = await Promise.all([
+        const [salesRes, invRes, prepRes, shopsRes, costsRes, stockRes] = await Promise.all([
           api.get(`/shops/${id}/sales`),
           api.get(`/shops/${id}/inventory-in`),
           api.get(`/shops/${id}/preparations`),
           api.get('/shops'),
-          api.get('/settings/selling-costs')
+          api.get(`/settings/selling-costs?shopId=${id}`),
+          api.get(`/shops/${id}/stock`)
         ]);
         setRecords(salesRes.data.data || []);
         setInvIn(invRes.data.data || []);
         setPreps(prepRes.data.data || []);
         setShops(shopsRes.data.data || []);
         setSellingCosts(costsRes.data.data || defaultCosts);
+        setLiveStock(stockRes.data.data);
       } catch (err) {
         console.error(err);
         toast({ title: "Error", description: "Failed to fetch sales dashboard data.", variant: "destructive" });
@@ -118,7 +125,15 @@ export default function InventoryOut({
   const defaultCosts = { fry: 280, curry: 250, bone: 200, boneless: 400, mixed: 200 };
   const [sellingCosts, setSellingCosts] = useState<any>(defaultCosts);
 
-  // Form State
+  // Form State & Refs
+  const itemRefs: Record<string, React.RefObject<HTMLInputElement>> = {
+    Bone: useRef<HTMLInputElement>(null),
+    Boneless: useRef<HTMLInputElement>(null),
+    Fry: useRef<HTMLInputElement>(null),
+    Curry: useRef<HTMLInputElement>(null),
+    Mixed: useRef<HTMLInputElement>(null),
+  };
+  const [stockError, setStockError] = useState<{ item: string; available: number; requested: number; field: string } | null>(null);
   
   const [boneSold, setBoneSold] = useState("");
   const [bonelessSold, setBonelessSold] = useState("");
@@ -140,6 +155,8 @@ export default function InventoryOut({
   const remainingBalance = grandTotalAmt - paymentTotalInitial;
 
   const todayStr = new Date().toISOString().split("T")[0];
+  const [salesDate, setSalesDate] = useState(todayStr);
+
   const todayRecords = records.filter(r => r.date === todayStr);
   const todayCash = todayRecords.reduce((s, r) => s + r.cash, 0);
   const todayPhonePe = todayRecords.reduce((s, r) => s + r.phonePe, 0);
@@ -165,28 +182,11 @@ export default function InventoryOut({
   }
 
   // Overall KPIs Calculation
-  const totalBoneIn = invIn.reduce((s, r) => s + (Number(r.bone) || 0), 0);
-  const totalBonelessIn = invIn.reduce((s, r) => s + (Number(r.boneless) || 0), 0);
-  const totalMixedIn = invIn.reduce((s, r) => s + (Number(r.mixed) || 0), 0);
-  
-  const totalFryPrep = preps.reduce((s, r) => s + (Number(r.fryPrep) || 0), 0);
-  const totalCurryPrep = preps.reduce((s, r) => s + (Number(r.curryPrep) || 0), 0);
-
-  const overallBoneSold = records.reduce((s, r) => s + (Number(r.boneSold) || 0), 0);
-  const overallBonelessSold = records.reduce((s, r) => s + (Number(r.bonelessSold) || 0), 0);
-  // Since preparations now draw down boneUsed and bonelessUsed, we calculate overall drawn down from prep records
-  const overallBoneUsed = preps.reduce((s, r: any) => s + (Number(r.boneUsed) || 0), 0);
-  const overallBonelessUsed = preps.reduce((s, r: any) => s + (Number(r.bonelessUsed) || 0), 0);
-  
-  const overallMixedSold = records.reduce((s, r) => s + (Number(r.mixedSold) || 0), 0);
-  const overallFrySold = records.reduce((s, r) => s + (Number(r.frySold) || 0), 0);
-  const overallCurrySold = records.reduce((s, r) => s + (Number(r.currySold) || 0), 0);
-
-  const availBone = totalBoneIn - overallBoneSold - overallBoneUsed;
-  const availBoneless = totalBonelessIn - overallBonelessSold - overallBonelessUsed;
-  const availMixed = totalMixedIn - overallMixedSold;
-  const availFry = totalFryPrep - overallFrySold;
-  const availCurry = totalCurryPrep - overallCurrySold;
+  const availBone = liveStock?.boneStock || 0;
+  const availBoneless = liveStock?.bonelessStock || 0;
+  const availMixed = liveStock?.mixedStock || 0;
+  const availFry = liveStock?.fryStock || 0;
+  const availCurry = liveStock?.curryStock || 0;
   const totalStock = availBone + availBoneless + availMixed + availFry + availCurry;
 
   // KPIs for Sold & Payment should compute over filteredRecords
@@ -218,26 +218,65 @@ export default function InventoryOut({
       toast({ title: "Error", description: "Empty sales entry.", variant: "destructive" });
       return;
     }
-    const payload = {
-      date: todayStr,
-      boneSold: Number(boneSold) || 0,
-      bonelessSold: Number(bonelessSold) || 0,
-      frySold: Number(frySold) || 0,
-      currySold: Number(currySold) || 0,
-      mixedSold: Number(mixedSold) || 0,
-      cash: Number(cash) || 0,
-      phonePe: Number(phonePe) || 0,
-      total: grandTotalAmt,
-      discountGiven: discountGivenVal,
-    };
+
     try {
+      // 1. Fetch current stock from backend
+      const stockRes = await api.get(`/shops/${id}/stock`);
+      const stock = stockRes.data.data;
+
+      const reqBone = Number(boneSold) || 0;
+      const reqBoneless = Number(bonelessSold) || 0;
+      const reqFry = Number(frySold) || 0;
+      const reqCurry = Number(currySold) || 0;
+      const reqMixed = Number(mixedSold) || 0;
+
+      // 2. Validate requested quantities vs available stock
+      if (reqBone > stock.boneStock) {
+        setStockError({ item: "Bone", available: stock.boneStock, requested: reqBone, field: "Bone" });
+        return;
+      }
+      if (reqBoneless > stock.bonelessStock) {
+        setStockError({ item: "Boneless", available: stock.bonelessStock, requested: reqBoneless, field: "Boneless" });
+        return;
+      }
+      if (reqMixed > stock.mixedStock) {
+        setStockError({ item: "Mixed", available: stock.mixedStock, requested: reqMixed, field: "Mixed" });
+        return;
+      }
+      if (reqFry > stock.fryStock) {
+        setStockError({ item: "Fry", available: stock.fryStock, requested: reqFry, field: "Fry" });
+        return;
+      }
+      if (reqCurry > stock.curryStock) {
+        setStockError({ item: "Curry", available: stock.curryStock, requested: reqCurry, field: "Curry" });
+        return;
+      }
+
+      const payload = {
+        date: salesDate,
+        boneSold: reqBone,
+        bonelessSold: reqBoneless,
+        frySold: reqFry,
+        currySold: reqCurry,
+        mixedSold: reqMixed,
+        cash: Number(cash) || 0,
+        phonePe: Number(phonePe) || 0,
+        total: grandTotalAmt,
+        discountGiven: discountGivenVal,
+      };
+
       await api.post(`/shops/${id}/sales`, payload);
       toast({ title: "Success", description: "Daily sales recorded successfully." });
       setBoneSold(""); setBonelessSold(""); setFrySold(""); setCurrySold(""); setMixedSold("");
       setCash(""); setPhonePe("");
+      if (onSalesModalClose) onSalesModalClose();
       fetchData();
-    } catch (err) {
-      toast({ title: "Error", description: "Failed to record sales.", variant: "destructive" });
+    } catch (err: any) {
+      toast({ 
+        title: "Error", 
+        description: err.response?.data?.message || "Failed to record sales.", 
+        variant: "destructive" 
+      });
     }
   };
 
@@ -362,10 +401,10 @@ export default function InventoryOut({
       <div className="space-y-6 mb-8">
          {/* ROW 1: TOTAL AVAILABLE STOCK */}
          <div>
-            <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3">Total Available Stock & Preparation</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <h3 className="text-[10px] sm:text-sm font-bold text-muted-foreground uppercase tracking-wider mb-2 sm:mb-3">Total Available Stock & Preparation</h3>
+            <div className="grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4">
               <StatCard title="Overall Total" value={`${totalStock} kg`} icon={null} />
-              <StatCard title="Bone Available" value={`${availBone} kg`} icon={null} />
+              <StatCard title="Bone Avail" value={`${availBone} kg`} icon={null} />
               <StatCard title="Boneless Avail." value={`${availBoneless} kg`} icon={null} />
               <StatCard title="Mixed Avail." value={`${availMixed} kg`} icon={null} />
               <StatCard title="Fry Prep." value={`${availFry} kg`} icon={null} />
@@ -375,8 +414,8 @@ export default function InventoryOut({
 
          {/* ROW 2: TOTAL STOCK SOLD */}
          <div>
-            <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3">Total Stock Sold</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <h3 className="text-[10px] sm:text-sm font-bold text-muted-foreground uppercase tracking-wider mb-2 sm:mb-3">Total Stock Sold</h3>
+            <div className="grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4">
               <StatCard title="Overall Total Sold" className="bg-card border-dashed" value={`${totalBoneSold + totalBonelessSold + totalMixedSold + totalFrySold + totalCurrySold} kg`} icon={null} />
               <StatCard title="Bone Sold" value={`${totalBoneSold} kg`} icon={null} />
               <StatCard title="Boneless Sold" value={`${totalBonelessSold} kg`} icon={null} />
@@ -388,8 +427,8 @@ export default function InventoryOut({
 
          {/* ROW 3: TOTAL AMOUNT */}
          <div>
-            <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3">Total Sales Amount</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <h3 className="text-[10px] sm:text-sm font-bold text-muted-foreground uppercase tracking-wider mb-2 sm:mb-3">Total Sales Amount</h3>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
               <StatCard title="Total Amount Received (₹)" value={`₹${(totalCash + totalPhonePe).toLocaleString("en-IN")}`} icon={null} />
               <StatCard title="Cash Received" value={`₹${totalCash.toLocaleString("en-IN")}`} icon={null} />
               <StatCard title="PhonePe Received" value={`₹${totalPhonePe.toLocaleString("en-IN")}`} icon={null} />
@@ -398,15 +437,24 @@ export default function InventoryOut({
          </div>
       </div>
 
-      {/* Entry Form */}
-      <div className="rounded-sm border bg-card shadow-none mb-8 overflow-hidden hover:bg-[var(--table-row-2)] transition-colors">
+      {/* Entry Form — inline on main page */}
+      <div className="rounded-sm border bg-card shadow-none mb-8 overflow-hidden">
         <div className="px-6 py-4 border-b border-border flex items-center gap-3" style={{backgroundColor: 'var(--table-header)'}}>
           <div className="w-1.5 h-6 bg-primary rounded-full"></div>
           <h2 className="text-xl font-black text-foreground tracking-tight uppercase">Daily Entry Form</h2>
         </div>
         <div className="p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+          <div className="mb-10 p-5 bg-[var(--table-row-2)] rounded-sm border border-border w-full sm:max-w-sm">
+            <Label className="text-lg font-bold text-muted-foreground block mb-2">Date</Label>
+            <Input
+              type="date"
+              value={salesDate}
+              onChange={(e) => setSalesDate(e.target.value)}
+              className="h-[56px] text-xl font-bold border-2 focus-visible:ring-primary focus-visible:border-primary px-4 shadow-none bg-background"
+            />
+          </div>
 
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
             {/* Section B */}
             <div className="space-y-6">
               <h3 className="text-xl font-bold text-muted-foreground uppercase flex items-center gap-3 border-b pb-3 mb-4">
@@ -420,24 +468,25 @@ export default function InventoryOut({
                   { label: "Curry", val: currySold, setter: setCurrySold, price: sellingCosts.curry, total: curryTotalAmt },
                   { label: "Mixed", val: mixedSold, setter: setMixedSold, price: sellingCosts.mixed, total: mixedTotalAmt },
                 ].map((item) => (
-                  <div key={item.label} className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 p-4 rounded-sm border border-border" style={{backgroundColor: 'var(--table-row-2)'}}>
-                    <div className="space-y-2">
-                       <Label className="text-lg font-semibold text-muted-foreground">{item.label} Sold (kg)</Label>
-                      <Input 
-                        type="number" 
-                        value={item.val} 
-                        onChange={(e) => item.setter(e.target.value)} 
-                        placeholder="0" 
-                        className="h-[56px] text-2xl font-bold border-2 focus-visible:ring-primary focus-visible:border-primary px-4 shadow-none bg-background"
+                  <div key={item.label} className="grid grid-cols-2 lg:grid-cols-3 gap-2 lg:gap-6 p-3 lg:p-4 rounded-sm border border-border" style={{backgroundColor: 'var(--table-row-2)'}}>
+                    <div className="space-y-1 lg:space-y-2">
+                      <Label className="text-xs lg:text-lg font-semibold text-muted-foreground">{item.label} Sold</Label>
+                      <Input
+                        ref={itemRefs[item.label] as any}
+                        type="number"
+                        value={item.val}
+                        onChange={(e) => item.setter(e.target.value)}
+                        placeholder="0"
+                        className="h-10 lg:h-[56px] text-lg lg:text-2xl font-bold border-2 focus-visible:ring-primary focus-visible:border-primary px-3 lg:px-4 shadow-none bg-background"
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-lg font-semibold text-muted-foreground">Price (₹/kg)</Label>
-                      <Input readOnly className="h-[56px] text-xl bg-muted/30 font-bold border-2 text-foreground" value={item.price} />
+                    <div className="space-y-1 lg:space-y-2">
+                      <Label className="text-xs lg:text-lg font-semibold text-muted-foreground">Price (₹/kg)</Label>
+                      <Input readOnly className="h-10 lg:h-[56px] text-base lg:text-xl bg-muted/30 font-bold border-2 text-foreground" value={item.price} />
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-lg font-semibold text-muted-foreground">Total (₹)</Label>
-                      <Input readOnly className="h-[56px] text-2xl font-black border-2 border-info/30 text-info" value={item.total} style={{backgroundColor: 'var(--primary-light-bg)'}} />
+                    <div className="space-y-1 lg:space-y-2 col-span-2 lg:col-span-1 border-t lg:border-t-0 pt-2 lg:pt-0">
+                      <Label className="text-xs lg:text-lg font-semibold text-muted-foreground">Total (₹)</Label>
+                      <Input readOnly className="h-10 lg:h-[56px] text-lg lg:text-2xl font-black border-2 border-info/30 text-info" value={item.total} style={{backgroundColor: 'var(--primary-light-bg)'}} />
                     </div>
                   </div>
                 ))}
@@ -445,119 +494,174 @@ export default function InventoryOut({
             </div>
 
             {/* Section C */}
-            <div className="space-y-6">
-              <h3 className="text-xl font-bold text-muted-foreground uppercase flex items-center gap-3 border-b pb-3 mb-4">
-                <Wallet className="h-6 w-6" /> Section C - Payment
+            <div className="space-y-4 lg:space-y-6">
+              <h3 className="text-base lg:text-xl font-bold text-muted-foreground uppercase flex items-center gap-2 lg:gap-3 border-b pb-2 lg:pb-3 mb-2 lg:mb-4">
+                <Wallet className="h-5 w-5 lg:h-6 lg:w-6" /> Section C - Payment
               </h3>
-              <div className="space-y-6">
-                
-                <div className="p-6 rounded-sm border-2 border-info/20 shadow-none flex justify-between items-center relative overflow-hidden" style={{backgroundColor: 'var(--primary-light-bg)'}}>
+              <div className="space-y-2 lg:space-y-6">
+                <div className="p-3 lg:p-6 rounded-sm border-2 border-info/20 shadow-none flex justify-between items-center relative overflow-hidden" style={{backgroundColor: 'var(--primary-light-bg)'}}>
                   <div className="absolute top-0 left-0 w-1.5 h-full bg-info" />
-                  <span className="font-bold text-info/80 justify-start pl-2 uppercase tracking-widest text-sm">Bill Total</span>
-                  <span className="text-4xl font-black text-info flex items-center tracking-tight"><IndianRupee className="w-8 h-8 mr-1" />{grandTotalAmt.toLocaleString("en-IN")}</span>
+                  <span className="font-bold text-info/80 justify-start pl-2 uppercase tracking-wide lg:tracking-widest text-xs lg:text-sm">Bill Total</span>
+                  <span className="text-2xl lg:text-4xl font-black text-info flex items-center tracking-tight"><IndianRupee className="w-5 h-5 lg:w-8 lg:h-8 mr-1" />{grandTotalAmt.toLocaleString("en-IN")}</span>
                 </div>
-                
-                <div className="space-y-2 p-5 rounded-sm border border-border" style={{backgroundColor: 'var(--table-row-2)'}}>
-                  <Label className="text-lg font-semibold block mb-2">Cash Received (₹)</Label>
-                  <Input 
-                    type="number" 
-                    value={cash} 
-                    onChange={(e) => setCash(e.target.value)} 
-                    placeholder="0" 
-                    className="h-[60px] text-3xl font-bold border-2 focus-visible:ring-primary focus-visible:border-primary px-4 bg-background"
-                  />
+                <div className="grid grid-cols-2 gap-2 lg:gap-6">
+                  <div className="space-y-1 lg:space-y-2 p-3 lg:p-5 rounded-sm border border-border" style={{backgroundColor: 'var(--table-row-2)'}}>
+                    <Label className="text-xs lg:text-lg font-semibold block mb-1 lg:mb-2 text-muted-foreground">Cash (₹)</Label>
+                    <Input
+                      type="number"
+                      value={cash}
+                      onChange={(e) => setCash(e.target.value)}
+                      placeholder="0"
+                      className="h-10 lg:h-[60px] text-lg lg:text-3xl font-bold border-2 focus-visible:ring-primary focus-visible:border-primary px-2 lg:px-4 bg-background"
+                    />
+                  </div>
+                  <div className="space-y-1 lg:space-y-2 p-3 lg:p-5 rounded-sm border border-border" style={{backgroundColor: 'var(--table-row-2)'}}>
+                    <Label className="text-xs lg:text-lg font-semibold block mb-1 lg:mb-2 text-muted-foreground">PhonePe (₹)</Label>
+                    <Input
+                      type="number"
+                      value={phonePe}
+                      onChange={(e) => setPhonePe(e.target.value)}
+                      placeholder="0"
+                      className="h-10 lg:h-[60px] text-lg lg:text-3xl font-bold border-2 focus-visible:ring-primary focus-visible:border-primary px-2 lg:px-4 text-info bg-background"
+                    />
+                  </div>
                 </div>
-                
-                <div className="space-y-2 p-5 rounded-sm border border-border" style={{backgroundColor: 'var(--table-row-2)'}}>
-                  <Label className="text-lg font-semibold block mb-2">PhonePe Received (₹)</Label>
-                  <Input 
-                    type="number" 
-                    value={phonePe} 
-                    onChange={(e) => setPhonePe(e.target.value)} 
-                    placeholder="0" 
-                    className="h-[60px] text-3xl font-bold border-2 focus-visible:ring-primary focus-visible:border-primary px-4 text-info bg-background"
-                  />
+                <div className="grid grid-cols-2 gap-2 lg:block lg:space-y-6">
+                  <div className="p-3 lg:p-5 rounded-sm flex flex-col lg:flex-row justify-center lg:justify-between items-start lg:items-center shadow-none border-2 border-destructive badge-error">
+                    <span className="font-extrabold uppercase tracking-widest text-[10px] lg:text-lg mb-1 lg:mb-0">Discount:</span>
+                    <span className="text-lg lg:text-3xl font-black flex items-center"><IndianRupee className="w-4 h-4 lg:w-6 lg:h-6 mr-1" />{discountGivenVal.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="p-3 lg:p-6 rounded-sm border-2 border-success/20 shadow-none flex flex-col lg:flex-row justify-center lg:justify-between items-start lg:items-center relative overflow-hidden bg-success/5 h-full">
+                    <div className="absolute top-0 left-0 w-1.5 h-full bg-success" />
+                    <span className="font-bold text-success/80 justify-start lg:pl-2 ml-2 lg:ml-0 uppercase tracking-wide lg:tracking-widest text-[10px] lg:text-sm mb-1 lg:mb-0">Amount Paid</span>
+                    <span className="text-xl lg:text-4xl font-black text-success flex items-center tracking-tight ml-2 lg:ml-0"><IndianRupee className="w-4 h-4 lg:w-8 lg:h-8 mr-1" />{paymentTotal.toLocaleString("en-IN")}</span>
+                  </div>
                 </div>
-                
-                <div className="p-5 rounded-sm flex justify-between items-center shadow-none block border-2 border-destructive badge-error">
-                  <span className="font-extrabold uppercase tracking-widest text-lg">Discount Given:</span>
-                  <span className="text-3xl font-black flex items-center"><IndianRupee className="w-6 h-6 mr-1" />{discountGivenVal.toLocaleString("en-IN")}</span>
-                </div>
-
-                <div className="p-6 rounded-sm border-2 border-success/20 shadow-none flex justify-between items-center relative overflow-hidden bg-success/5">
-                  <div className="absolute top-0 left-0 w-1.5 h-full bg-success" />
-                  <span className="font-bold text-success/80 justify-start pl-2 uppercase tracking-widest text-sm">Amount Paid</span>
-                  <span className="text-4xl font-black text-success flex items-center tracking-tight"><IndianRupee className="w-8 h-8 mr-1" />{paymentTotal.toLocaleString("en-IN")}</span>
-                </div>
-                
               </div>
             </div>
           </div>
 
-          <div className="flex flex-col md:flex-row gap-4 md:gap-6 mt-10 pt-6 border-t">
-            <Button onClick={handleSaveSales} className="flex-1 h-[60px] text-xl bg-primary hover:bg-primary/80 font-bold text-white shadow-none">
+          <div className="flex flex-col md:flex-row gap-3 md:gap-6 mt-6 md:mt-10 pt-4 md:pt-6 border-t">
+            <Button onClick={handleSaveSales} className="flex-1 h-12 md:h-[60px] text-lg md:text-xl bg-primary hover:bg-primary/80 font-bold text-white shadow-none">
               Save Sales Entry
-            </Button>
-            <Button 
-              variant="outline" 
-              className="flex-1 h-[60px] text-xl border-2 border-primary text-primary hover:bg-primary hover:text-white font-bold shadow-none"
-              onClick={() => toast({ title: "Redirecting...", description: "Opening Billing System" })}
-            >
-              Generate Bill
             </Button>
           </div>
         </div>
       </div>
 
+      {/* Sales Entry Modal */}
+      <Dialog open={!!salesModalOpen} onOpenChange={(open) => !open && onSalesModalClose && onSalesModalClose()}>
+        <DialogContent className="w-[97vw] max-w-2xl max-h-[92vh] overflow-y-auto p-0 [&>button]:hidden">
+          <DialogHeader className="px-5 pt-5 pb-3 border-b sticky top-0 bg-card z-10">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-lg font-black uppercase tracking-tight flex items-center gap-2">
+                <span className="w-1 h-5 bg-primary rounded-full inline-block" />
+                Daily Entry Form
+              </DialogTitle>
+              <button
+                onClick={() => onSalesModalClose && onSalesModalClose()}
+                className="h-8 w-8 flex items-center justify-center rounded-sm hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </DialogHeader>
+          <div className="p-5 space-y-5">
+            {/* Date */}
+            <div className="flex items-center gap-3">
+              <Label className="text-sm font-bold text-muted-foreground w-12 shrink-0">Date</Label>
+              <Input 
+                type="date" 
+                value={salesDate} 
+                onChange={(e) => setSalesDate(e.target.value)} 
+                className="h-10 text-base font-bold border-2 focus-visible:ring-primary"
+              />
+            </div>
+
+            {/* Section B - Sales */}
+            <div>
+              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2 border-b pb-2 mb-3">
+                <Beef className="h-4 w-4" /> Section B — Sales
+              </h3>
+              <div className="space-y-2">
+                {[
+                  { label: "Bone", val: boneSold, setter: setBoneSold, price: sellingCosts.bone, total: boneTotalAmt },
+                  { label: "Boneless", val: bonelessSold, setter: setBonelessSold, price: sellingCosts.boneless, total: bonelessTotalAmt },
+                  { label: "Fry", val: frySold, setter: setFrySold, price: sellingCosts.fry, total: fryTotalAmt },
+                  { label: "Curry", val: currySold, setter: setCurrySold, price: sellingCosts.curry, total: curryTotalAmt },
+                  { label: "Mixed", val: mixedSold, setter: setMixedSold, price: sellingCosts.mixed, total: mixedTotalAmt },
+                ].map((item) => (
+                  <div key={item.label} className="grid grid-cols-3 gap-2 p-3 rounded-sm border border-border" style={{backgroundColor: 'var(--table-row-2)'}}>
+                    <div className="space-y-1">
+                      <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{item.label} Sold (kg)</Label>
+                      <Input 
+                        ref={itemRefs[item.label] as any}
+                        type="number" 
+                        value={item.val} 
+                        onChange={(e) => item.setter(e.target.value)} 
+                        placeholder="0" 
+                        className="h-11 text-lg font-bold border-2 focus-visible:ring-primary px-3"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Price (₹/kg)</Label>
+                      <Input readOnly className="h-11 bg-muted/30 font-bold border-2" value={item.price} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Total (₹)</Label>
+                      <Input readOnly className="h-11 text-lg font-black border-2 border-primary/20 text-primary" value={item.total.toLocaleString("en-IN")} style={{backgroundColor: 'var(--primary-light-bg)'}} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Section C - Payment */}
+            <div>
+              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2 border-b pb-2 mb-3">
+                <Wallet className="h-4 w-4" /> Section C — Payment
+              </h3>
+              <div className="space-y-3">
+                <div className="p-3 rounded-sm border-2 border-primary/20 flex justify-between items-center" style={{backgroundColor: 'var(--primary-light-bg)'}}>
+                  <span className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Bill Total</span>
+                  <span className="text-2xl font-black text-primary flex items-center"><IndianRupee className="w-5 h-5 mr-0.5" />{grandTotalAmt.toLocaleString("en-IN")}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1 p-3 rounded-sm border border-border" style={{backgroundColor: 'var(--table-row-2)'}}>
+                    <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Cash (₹)</Label>
+                    <Input type="number" value={cash} onChange={(e) => setCash(e.target.value)} placeholder="0" className="h-12 text-2xl font-bold border-2 focus-visible:ring-primary px-3" />
+                  </div>
+                  <div className="space-y-1 p-3 rounded-sm border border-border" style={{backgroundColor: 'var(--table-row-2)'}}>
+                    <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">PhonePe (₹)</Label>
+                    <Input type="number" value={phonePe} onChange={(e) => setPhonePe(e.target.value)} placeholder="0" className="h-12 text-2xl font-bold border-2 focus-visible:ring-primary px-3 text-primary" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-3 rounded-sm border-2 border-destructive badge-error flex flex-col">
+                    <span className="font-bold uppercase text-[10px] tracking-wider">Discount</span>
+                    <span className="text-xl font-black flex items-center mt-1"><IndianRupee className="w-4 h-4 mr-0.5" />{discountGivenVal.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="p-3 rounded-sm border-2 border-success/20 bg-success/5 flex flex-col">
+                    <span className="font-bold uppercase text-[10px] tracking-wider text-success/80">Amount Paid</span>
+                    <span className="text-xl font-black text-success flex items-center mt-1"><IndianRupee className="w-4 h-4 mr-0.5" />{paymentTotal.toLocaleString("en-IN")}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="px-5 pb-5 sticky bottom-0 bg-card pt-3 border-t">
+            <Button onClick={handleSaveSales} className="w-full h-12 text-base bg-primary hover:bg-primary/80 font-bold text-white shadow-none">
+              Save Sales Entry
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Sales Log Table */}
       <div className="rounded-sm border bg-card shadow-none mb-8">
-        <div className="px-6 py-4 border-b flex justify-between items-center border-border" style={{backgroundColor: 'var(--table-header)'}}>
+        <div className="px-6 py-4 border-b flex items-center border-border" style={{backgroundColor: 'var(--table-header)'}}>
           <h2 className="text-lg font-black text-foreground uppercase tracking-wide">Daily Sales Log</h2>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="text-xs h-8">
-                <DownloadCloud className="w-3.5 h-3.5 mr-2" /> Export Records
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Export Sales Records</DialogTitle>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="space-y-1.5">
-                  <Label>Format</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button variant={exportFormat === "CSV" ? "default" : "outline"} className={exportFormat === "CSV" ? "bg-primary hover:bg-primary/80" : ""} onClick={() => setExportFormat("CSV")}>CSV (Excel)</Button>
-                    <Button variant={exportFormat === "PDF" ? "default" : "outline"} className={exportFormat === "PDF" ? "bg-primary hover:bg-primary/80" : ""} onClick={() => setExportFormat("PDF")}>PDF Document</Button>
-                  </div>
-                </div>
-                <div className="space-y-1.5 mt-2">
-                  <Label>Date Range</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button variant={exportRange === "Daily" ? "default" : "outline"} className={exportRange === "Daily" ? "bg-primary hover:bg-primary/80" : ""} onClick={() => setExportRange("Daily")}>Today</Button>
-                    <Button variant={exportRange === "Weekly" ? "default" : "outline"} className={exportRange === "Weekly" ? "bg-primary hover:bg-primary/80" : ""} onClick={() => setExportRange("Weekly")}>This Week</Button>
-                    <Button variant={exportRange === "Monthly" ? "default" : "outline"} className={exportRange === "Monthly" ? "bg-primary hover:bg-primary/80" : ""} onClick={() => setExportRange("Monthly")}>This Month</Button>
-                    <Button variant={exportRange === "Custom" ? "default" : "outline"} className={exportRange === "Custom" ? "bg-primary hover:bg-primary/80" : ""} onClick={() => setExportRange("Custom")}>Custom Margin</Button>
-                  </div>
-                </div>
-                {exportRange === "Custom" && (
-                  <div className="grid grid-cols-2 gap-4 mt-2">
-                    <div className="space-y-1.5">
-                      <Label>Start Date</Label>
-                      <Input type="date" value={exportStart} onChange={(e) => setExportStart(e.target.value)} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>End Date</Label>
-                      <Input type="date" value={exportEnd} onChange={(e) => setExportEnd(e.target.value)} />
-                    </div>
-                  </div>
-                )}
-              </div>
-              <DialogFooter>
-                <Button onClick={handleExport} className="bg-primary hover:bg-primary/80">Download {exportFormat}</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
         </div>
         <div className="p-2 border-b">
           <DataTable
@@ -689,17 +793,52 @@ export default function InventoryOut({
             </div>
           </div>
           
-          <DialogFooter className="p-4 bg-muted/30 border-t flex flex-col sm:flex-row sm:justify-between items-center gap-4 sm:gap-2">
-            <p className="text-[10px] text-center sm:text-left text-muted-foreground flex-1 italic mb-2 sm:mb-0">Thank you for shopping with Pinaka Meat Shop!</p>
-            <div className="flex w-full sm:w-auto gap-2 justify-center sm:justify-end">
-              <Button variant="outline" size="sm" onClick={() => setSelectedBill(null)} className="h-8">Close</Button>
-              <Button size="sm" className="bg-primary hover:bg-primary/80 h-8">
-                <Download className="h-3 w-3 mr-2" /> Download PDF
-              </Button>
-            </div>
+          <DialogFooter className="p-4 bg-muted/30 border-t flex justify-between items-center">
+            <p className="text-[10px] text-muted-foreground italic">Thank you for shopping with Pinaka!</p>
+            <Button variant="outline" size="sm" onClick={() => setSelectedBill(null)} className="h-8">Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Stock Error Modal */}
+      <Dialog open={!!stockError} onOpenChange={(open) => !open && setStockError(null)}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-destructive flex items-center gap-2">
+              ⚠️ Insufficient Stock
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-4">
+            <p className="text-foreground text-base">Not enough <strong className="text-primary">{stockError?.item}</strong> stock available.</p>
+            <div className="bg-muted p-4 rounded-md space-y-2 border">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground font-semibold">Available:</span>
+                <span className="font-bold text-lg">{stockError?.available.toFixed(2)} <span className="text-xs">kg</span></span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground font-semibold">Requested:</span>
+                <span className="text-destructive font-bold text-lg">{stockError?.requested.toFixed(2)} <span className="text-xs">kg</span></span>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">Please adjust the quantity to continue.</p>
+          </div>
+          <DialogFooter className="mt-2">
+            <Button 
+              className="w-full bg-[#FF6B00] hover:bg-[#FF6B00]/90 text-white font-bold h-12 text-lg"
+              onClick={() => {
+                const field = stockError?.field;
+                setStockError(null);
+                if (field && itemRefs[field]?.current) {
+                  setTimeout(() => itemRefs[field].current?.focus(), 100);
+                }
+              }}
+            >
+              Fix Quantity
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

@@ -48,9 +48,31 @@ const updateShopInventory = async (req, res) => {
 // @desc   Delete shop inventory entry
 // @route  DELETE /api/shops/:shopId/inventory-in/:id
 const deleteShopInventory = async (req, res) => {
-  const record = await ShopInventory.findOneAndDelete({ _id: req.params.id, shopId: req.params.shopId });
+  const record = await ShopInventory.findOne({ _id: req.params.id, shopId: req.params.shopId });
   if (!record) return res.status(404).json({ success: false, message: 'Record not found' });
-  res.json({ success: true, message: 'Record deleted' });
+
+  // If internal supply, restore to Central Inventory and cleanly delete the original Supply record
+  if ((record.transport === 'Internal Supply' || record.supplyId) && record.supplyId) {
+    const InventorySupply = require('../models/InventorySupply.model');
+    const CentralInventory = require('../models/CentralInventory.model');
+
+    const supply = await InventorySupply.findByIdAndDelete(record.supplyId);
+    if (supply) {
+      const invItem = await CentralInventory.findOne({ batchNo: supply.batch });
+      if (invItem && invItem.mixed) {
+        const supplyTotal = (supply.bone || 0) + (supply.boneless || 0) + (supply.mixed || 0);
+        invItem.mixed.qty += supplyTotal;
+        invItem.totalWeight = (invItem.bone?.qty || 0) + (invItem.boneless?.qty || 0) + (invItem.mixed?.qty || 0);
+        invItem.status = invItem.totalWeight > 0 ? 'Available' : 'Empty';
+        await invItem.save();
+      }
+    }
+  }
+
+  // Delete the shop inventory record
+  await ShopInventory.findByIdAndDelete(record._id);
+
+  res.json({ success: true, message: 'Record deleted', source: record.transport === 'Internal Supply' ? 'internal' : 'external' });
 };
 
 module.exports = { getShopInventory, createShopInventory, updateShopInventory, deleteShopInventory };

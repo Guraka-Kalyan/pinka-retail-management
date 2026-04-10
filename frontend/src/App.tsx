@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import Layout from "@/components/Layout";
+import ProtectedRoute from "@/components/ProtectedRoute";
 import Dashboard from "@/pages/Dashboard";
 import Dressing from "@/pages/Dressing";
 import Supply from "@/pages/Supply";
@@ -15,6 +16,7 @@ import Shop from "@/pages/Shop";
 import ShopDashboard from "@/pages/ShopDashboard";
 import NotFound from "@/pages/NotFound";
 import Login from "@/pages/Login";
+import Profile from "@/pages/Profile";
 
 const queryClient = new QueryClient();
 
@@ -25,19 +27,26 @@ const App = () => (
         <Toaster />
         <BrowserRouter>
           <Routes>
+            {/* Public routes */}
             <Route path="/" element={<Login />} />
             <Route path="/login" element={<Login />} />
-            <Route element={<Layout />}>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/dressing" element={<Dressing />} />
-              <Route path="/supply" element={<Supply />} />
-              <Route path="/shop" element={<Shop />} />
-              <Route path="/shop/:id" element={<ShopDashboard />} />
-              <Route path="/inventory/in" element={<InventoryIn />} />
-              <Route path="/inventory/out" element={<InventoryOut />} />
-              <Route path="/sales" element={<Sales />} />
-              <Route path="/reports" element={<Reports />} />
+
+            {/* Protected routes — requires JWT token in localStorage */}
+            <Route element={<ProtectedRoute />}>
+              <Route element={<Layout />}>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/dressing" element={<Dressing />} />
+                <Route path="/supply" element={<Supply />} />
+                <Route path="/shop" element={<Shop />} />
+                <Route path="/shop/:id" element={<ShopDashboard />} />
+                <Route path="/inventory/in" element={<InventoryIn />} />
+                <Route path="/inventory/out" element={<InventoryOut />} />
+                <Route path="/sales" element={<Sales />} />
+                <Route path="/reports" element={<Reports />} />
+                <Route path="/profile" element={<Profile />} />
+              </Route>
             </Route>
+
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

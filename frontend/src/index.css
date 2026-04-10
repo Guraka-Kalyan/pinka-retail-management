@@ -62,7 +62,7 @@
     --muted: var(--page-bg);
     --muted-foreground: var(--text-muted);
     
-    --destructive: var(--error);
+    --destructive: var(--primary);
     --destructive-foreground: #ffffff;
     
     --input: var(--border);
@@ -127,7 +127,7 @@
     --muted: var(--page-bg);
     --muted-foreground: var(--text-muted);
     
-    --destructive: var(--error);
+    --destructive: var(--primary);
     --destructive-foreground: #ffffff;
     
     --input: var(--border);

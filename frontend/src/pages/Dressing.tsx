@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import Breadcrumb from "@/components/Breadcrumb";
 import DataTable from "@/components/DataTable";
 import { Button } from "@/components/ui/button";
@@ -10,13 +11,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import api from "@/lib/api";
 
 const defaultPackaging = [
-  { name: "Bone", price: 350 },
-  { name: "Boneless", price: 400 },
   { name: "Mixed", price: 380 },
 ];
 
 export default function Dressing() {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [records, setRecords] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -48,7 +48,7 @@ export default function Dressing() {
   const handleEditClick = (r: any) => {
     setEditingBatch(r.batch);
     setEditingId(r._id);
-    setEditForm({ ...r, pkgItems: r.pkgItems || { bone: 0, boneless: 0, mixed: 0 } });
+    setEditForm({ ...r, pkgItems: r.pkgItems || { mixed: { qty: 0, pricePerKg: 0 } } });
   };
 
   const handleEditField = (field: string, val: any) => {
@@ -76,7 +76,10 @@ export default function Dressing() {
       ...editForm,
       pkgItems: {
         ...editForm.pkgItems,
-        [item]: Number(val) || 0
+        [item]: {
+          qty: Number(val.qty) || 0,
+          pricePerKg: Number(val.pricePerKg) || 0
+        }
       }
     });
   };
@@ -143,10 +146,11 @@ export default function Dressing() {
   const costPerKg = (totalCost > 0 && usableMeat > 0) ? (totalCost / usableMeat).toFixed(2) : "0.00";
 
   const nextBatch = "Auto-generated";
+  const [afterSlaughterErrors, setAfterSlaughterErrors] = useState<any>({});
 
   const handleSaveBefore = async () => {
     if (!animalId || !animalWeight) {
-      toast({ title: "Error", description: "Fill required fields", variant: "destructive" });
+      toast({ title: "Missing Details", description: "Please fill in all required fields to register the animal.", variant: "destructive" });
       return;
     }
     const newRecord = {
@@ -174,8 +178,28 @@ export default function Dressing() {
   };
 
   const handleSaveAfter = async () => {
-    if (!linkedAnimal || totalCarcass === 0) {
-      toast({ title: "Error", description: "Fill all weight fields", variant: "destructive" });
+    const errors: any = {};
+    let hasError = false;
+    let missingWeight = false;
+
+    if (!linkedAnimal) {
+      errors.linkedAnimal = true;
+      hasError = true;
+    }
+
+    if (!head || head === "") { errors.head = true; missingWeight = true; hasError = true; }
+    if (!ribs || ribs === "") { errors.ribs = true; missingWeight = true; hasError = true; }
+    if (!ham || ham === "") { errors.ham = true; missingWeight = true; hasError = true; }
+    if (!offals || offals === "") { errors.offals = true; missingWeight = true; hasError = true; }
+
+    setAfterSlaughterErrors(errors);
+
+    if (hasError) {
+      if (!linkedAnimal) {
+        toast({ title: "Animal Required", description: "Please select an animal to continue.", variant: "destructive" });
+      } else if (missingWeight) {
+        toast({ title: "Missing Details", description: "Please enter all required weight fields (Head, Ribs, Ham, Offals).", variant: "destructive" });
+      }
       return;
     }
 
@@ -191,7 +215,14 @@ export default function Dressing() {
         offals: Number(offals) || 0,
       });
 
-      toast({ title: "Saved", description: `After slaughter data saved` });
+      const updatedRecord = records.find(r => r._id === linkedAnimal);
+      const batchName = updatedRecord?.batchNo || updatedRecord?.batch || "Unknown";
+
+      toast({ title: "Saved", description: `Saved successfully. Continue with packaging below.` });
+
+      // Automatically open packaging
+      setPackagingBatch(batchName);
+      setPackagingId(linkedAnimal);
 
       // Clear fields
       setLinkedAnimal("");
@@ -199,7 +230,12 @@ export default function Dressing() {
       setRibs("");
       setHam("");
       setOffals("");
+      setAfterSlaughterErrors({});
       fetchData();
+
+      setTimeout(() => {
+        document.getElementById("packaging-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 150);
     } catch (err) {
       console.error(err);
       toast({ title: "Error", description: "Failed to update record", variant: "destructive" });
@@ -208,10 +244,27 @@ export default function Dressing() {
 
   const handleMoveToInventory = async () => {
     if (packagingBatch && packagingId) {
+      const pRecord = records.find(r => r.batch === packagingBatch);
+      const packagingUsableMeat = pRecord && pRecord.usableMeat && pRecord.usableMeat !== "-" ? Number(pRecord.usableMeat) : 0;
+      const totalQty = pkgItems.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+      
+      if (packagingUsableMeat > 0 && totalQty > packagingUsableMeat) {
+        toast({
+          title: "Packaging exceeds available meat.",
+          description: (
+            <div className="mt-1 flex flex-col gap-1">
+              <div>Usable Meat: {packagingUsableMeat} kg</div>
+              <div>Entered: {totalQty} kg</div>
+              <div className="mt-2 text-sm font-medium">Please adjust quantities.</div>
+            </div>
+          ),
+          variant: "destructive"
+        });
+        return;
+      }
+
       const packagingData = {
-        bone: pkgItems[0].qty,
-        boneless: pkgItems[1].qty,
-        mixed: pkgItems[2].qty,
+        mixed: { qty: pkgItems[0].qty, pricePerKg: pkgItems[0].price },
       };
 
       try {
@@ -226,6 +279,7 @@ export default function Dressing() {
         setHam("");
         setOffals("");
         fetchData();
+        navigate("/supply");
       } catch (err) {
         console.error(err);
         toast({ title: "Error", description: "Failed to move to inventory", variant: "destructive" });
@@ -235,11 +289,28 @@ export default function Dressing() {
 
   const handleSavePackaging = async () => {
     if (packagingBatch && packagingId) {
+      const pRecord = records.find(r => r.batch === packagingBatch);
+      const packagingUsableMeat = pRecord && pRecord.usableMeat && pRecord.usableMeat !== "-" ? Number(pRecord.usableMeat) : 0;
+      const totalQty = pkgItems.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+      
+      if (packagingUsableMeat > 0 && totalQty > packagingUsableMeat) {
+        toast({
+          title: "Packaging exceeds available meat.",
+          description: (
+            <div className="mt-1 flex flex-col gap-1">
+              <div>Usable Meat: {packagingUsableMeat} kg</div>
+              <div>Entered: {totalQty} kg</div>
+              <div className="mt-2 text-sm font-medium">Please adjust quantities.</div>
+            </div>
+          ),
+          variant: "destructive"
+        });
+        return;
+      }
+
       const packagingData = {
         pkgItems: {
-          bone: pkgItems[0].qty,
-          boneless: pkgItems[1].qty,
-          mixed: pkgItems[2].qty,
+          mixed: { qty: pkgItems[0].qty, pricePerKg: pkgItems[0].price },
         }
       };
 
@@ -269,10 +340,12 @@ export default function Dressing() {
   };
 
   const grandTotal = pkgItems.reduce((sum, item) => sum + item.qty * item.price, 0);
+  const totalQty = pkgItems.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+  const pRecord = records.find(r => r.batch === packagingBatch);
+  const packagingUsableMeat = pRecord && pRecord.usableMeat && pRecord.usableMeat !== "-" ? Number(pRecord.usableMeat) : 0;
+  const isExceeded = packagingUsableMeat > 0 && totalQty > packagingUsableMeat;
 
-  const animalOptions = Array.from(new Set([
-    ...records.filter(r => r.status === "Unslaughtered").map(r => ({ _id: r._id, animalId: r.animalId })),
-  ]));
+  const animalOptions = records.filter(r => r.status === "Unslaughtered");
 
   return (
     <div className="animate-fade-in pb-12 w-full">
@@ -289,12 +362,12 @@ export default function Dressing() {
         <div className="rounded-sm border bg-card p-6 shadow-none">
           <h2 className="text-lg font-semibold mb-4">Before Slaughter</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div><Label>Animal ID</Label><Input value={animalId} onChange={(e) => setAnimalId(e.target.value)} placeholder="AN-106" /></div>
-            <div><Label>Animal Weight (kg)</Label><Input type="number" value={animalWeight} onChange={(e) => handleWeightChange(e.target.value)} placeholder="85" /></div>
-            <div><Label>Rate per kg (₹)</Label><Input type="number" value={rate} onChange={(e) => handleRateChange(e.target.value)} placeholder="140" /></div>
-            <div><Label>Total Cost (₹)</Label><Input type="number" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="11900" /></div>
+            <div><Label>Animal ID</Label><Input value={animalId} onChange={(e) => setAnimalId(e.target.value)} /></div>
+            <div><Label>Animal Weight (kg)</Label><Input type="number" value={animalWeight} onChange={(e) => handleWeightChange(e.target.value)} /></div>
+            <div><Label>Rate per kg (₹)</Label><Input type="number" value={rate} onChange={(e) => handleRateChange(e.target.value)} /></div>
+            <div><Label>Total Cost (₹)</Label><Input type="number" value={cost} onChange={(e) => setCost(e.target.value)} /></div>
             <div><Label>Date</Label><Input type="date" defaultValue={new Date().toISOString().split("T")[0]} /></div>
-            <div><Label>Farm Location</Label><Input value={farmLocation} onChange={(e) => setFarmLocation(e.target.value)} placeholder="Village Farm" /></div>
+            <div><Label>Farm Location</Label><Input value={farmLocation} onChange={(e) => setFarmLocation(e.target.value)} /></div>
           </div>
           <Button className="mt-4" onClick={handleSaveBefore}>Save</Button>
         </div>
@@ -310,27 +383,81 @@ export default function Dressing() {
             <div>
               <div className="flex flex-wrap justify-between items-center mb-1 gap-1">
                 <Label>Link to Animal ID</Label>
-                {linkedAnimal && (
+                {linkedAnimal && selectedRecord && (
                   <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/20">
-                    {linkedAnimal} / {selectedRecord?.animalWeight ? `${selectedRecord.animalWeight} kg` : "N/A"}
+                    {selectedRecord.animalId} — {selectedRecord.animalWeight || 0} kg
                   </span>
                 )}
               </div>
               <select
-                className="flex h-10 w-full rounded-sm border border-input bg-background px-3 py-2 text-sm"
+                className={`flex h-10 w-full rounded-sm border ${afterSlaughterErrors.linkedAnimal ? "border-destructive ring-1 ring-destructive" : "border-input"} bg-background px-3 py-2 text-sm`}
                 value={linkedAnimal}
-                onChange={(e) => setLinkedAnimal(e.target.value)}
+                onChange={(e) => {
+                  setLinkedAnimal(e.target.value);
+                  if (afterSlaughterErrors.linkedAnimal) setAfterSlaughterErrors({ ...afterSlaughterErrors, linkedAnimal: false });
+                }}
               >
                 <option value="" className="bg-background text-foreground">Select Animal</option>
                 {animalOptions.map((a: any) => (
-                  <option key={a._id} value={a._id} className="bg-background text-foreground">{a.animalId}</option>
+                  <option key={a._id} value={a._id} className="bg-background text-foreground">
+                    {a.animalId}
+                  </option>
                 ))}
               </select>
+              {afterSlaughterErrors.linkedAnimal && <p className="text-xs text-destructive mt-1">This field is required</p>}
             </div>
-            <div><Label>Head (kg)</Label><Input type="number" value={head} onChange={(e) => setHead(e.target.value)} /></div>
-            <div><Label>Ribs (kg)</Label><Input type="number" value={ribs} onChange={(e) => setRibs(e.target.value)} /></div>
-            <div><Label>Ham (kg)</Label><Input type="number" value={ham} onChange={(e) => setHam(e.target.value)} /></div>
-            <div><Label>Offals (kg)</Label><Input type="number" value={offals} onChange={(e) => setOffals(e.target.value)} /></div>
+            <div>
+              <Label>Head (kg)</Label>
+              <Input 
+                type="number" 
+                value={head} 
+                onChange={(e) => {
+                  setHead(e.target.value);
+                  if (afterSlaughterErrors.head) setAfterSlaughterErrors({ ...afterSlaughterErrors, head: false });
+                }} 
+                className={afterSlaughterErrors.head ? "border-destructive focus-visible:ring-destructive" : ""} 
+              />
+              {afterSlaughterErrors.head && <p className="text-xs text-destructive mt-1">This field is required</p>}
+            </div>
+            <div>
+              <Label>Ribs (kg)</Label>
+              <Input 
+                type="number" 
+                value={ribs} 
+                onChange={(e) => {
+                  setRibs(e.target.value);
+                  if (afterSlaughterErrors.ribs) setAfterSlaughterErrors({ ...afterSlaughterErrors, ribs: false });
+                }} 
+                className={afterSlaughterErrors.ribs ? "border-destructive focus-visible:ring-destructive" : ""} 
+              />
+              {afterSlaughterErrors.ribs && <p className="text-xs text-destructive mt-1">This field is required</p>}
+            </div>
+            <div>
+              <Label>Ham (kg)</Label>
+              <Input 
+                type="number" 
+                value={ham} 
+                onChange={(e) => {
+                  setHam(e.target.value);
+                  if (afterSlaughterErrors.ham) setAfterSlaughterErrors({ ...afterSlaughterErrors, ham: false });
+                }} 
+                className={afterSlaughterErrors.ham ? "border-destructive focus-visible:ring-destructive" : ""} 
+              />
+              {afterSlaughterErrors.ham && <p className="text-xs text-destructive mt-1">This field is required</p>}
+            </div>
+            <div>
+              <Label>Offals (kg)</Label>
+              <Input 
+                type="number" 
+                value={offals} 
+                onChange={(e) => {
+                  setOffals(e.target.value);
+                  if (afterSlaughterErrors.offals) setAfterSlaughterErrors({ ...afterSlaughterErrors, offals: false });
+                }} 
+                className={afterSlaughterErrors.offals ? "border-destructive focus-visible:ring-destructive" : ""} 
+              />
+              {afterSlaughterErrors.offals && <p className="text-xs text-destructive mt-1">This field is required</p>}
+            </div>
           </div>
           <div className="mt-4 grid grid-cols-2 lg:grid-cols-6 gap-3 text-sm">
             <div className="bg-secondary flex flex-col rounded-sm p-3">
@@ -378,7 +505,7 @@ export default function Dressing() {
 
       {/* Packaging */}
       {packagingBatch && (
-        <div className="rounded-sm border bg-card p-6 shadow-none mb-8">
+        <div id="packaging-section" className="rounded-sm border bg-card p-6 shadow-none mb-8 animate-in fade-in slide-in-from-bottom-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
             <div className="flex items-center gap-3">
               <Button variant="ghost" size="icon" onClick={() => { setPackagingBatch(null); setPackagingId(null); }} className="h-8 w-8 text-muted-foreground hover:text-foreground">
@@ -387,11 +514,9 @@ export default function Dressing() {
               <h2 className="text-lg font-semibold m-0">Packaging — Batch [{packagingBatch}]</h2>
             </div>
 
-            <div className="bg-primary/15 text-primary border border-primary/30 px-5 py-2.5 rounded-sm shadow-none font-bold text-sm tracking-wide self-start sm:self-auto">
-              Usable Meat: {(() => {
-                const pRec = records.find(r => r.batch === packagingBatch);
-                return pRec?.usableMeat && pRec.usableMeat !== "-" ? `${pRec.usableMeat} kg` : "N/A";
-              })()}
+            <div className={`px-5 py-2.5 rounded-sm shadow-none font-bold text-sm tracking-wide self-start sm:self-auto border ${isExceeded ? 'bg-destructive/15 text-destructive border-destructive/30' : 'bg-primary/15 text-primary border-primary/30'}`}>
+              Total Packed: {totalQty} / {packagingUsableMeat > 0 ? `${packagingUsableMeat} kg` : "N/A"}
+              {isExceeded && <span className="ml-2 text-xs opacity-80">(Exceeded)</span>}
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -446,8 +571,8 @@ export default function Dressing() {
             </table>
           </div>
           <div className="mt-6 flex gap-3">
-            <Button onClick={handleMoveToInventory} className="bg-primary hover:bg-primary/80 text-white">Move to Inventory</Button>
-            <Button variant="outline" onClick={handleSavePackaging} className="border-primary text-primary hover:bg-primary hover:text-white">Save Packaging</Button>
+            <Button onClick={handleMoveToInventory} className="bg-primary hover:bg-primary/80 text-white">Save & Go to Inventory</Button>
+            <Button variant="outline" onClick={handleSavePackaging} className="border-primary text-primary hover:bg-primary hover:text-white">Save</Button>
           </div>
         </div>
       )}
@@ -538,10 +663,15 @@ export default function Dressing() {
               {/* Packaging */}
               <div className="border rounded-sm p-4 bg-muted/20">
                 <h3 className="font-medium mb-3">Packaging</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <div><Label>Bone (kg)</Label><Input type="number" value={editForm.pkgItems?.bone || ""} onChange={(e) => handleEditPkg("bone", e.target.value)} /></div>
-                  <div><Label>Boneless (kg)</Label><Input type="number" value={editForm.pkgItems?.boneless || ""} onChange={(e) => handleEditPkg("boneless", e.target.value)} /></div>
-                  <div><Label>Mixed (kg)</Label><Input type="number" value={editForm.pkgItems?.mixed || ""} onChange={(e) => handleEditPkg("mixed", e.target.value)} /></div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <Label>Mixed (kg)</Label>
+                    <Input type="number" value={editForm.pkgItems?.mixed?.qty || ""} onChange={(e) => handleEditPkg("mixed", { ...(editForm.pkgItems?.mixed || {}), qty: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>Mixed Unit Price (₹)</Label>
+                    <Input type="number" value={editForm.pkgItems?.mixed?.pricePerKg || ""} onChange={(e) => handleEditPkg("mixed", { ...(editForm.pkgItems?.mixed || {}), pricePerKg: e.target.value })} />
+                  </div>
                 </div>
               </div>
 
@@ -602,7 +732,13 @@ export default function Dressing() {
               header: "Action", accessor: (r) => (
                 <div className="flex gap-1 items-center">
                   {r.status === "Slaughtered" && (
-                    <Button variant="outline" size="sm" className="h-8 text-xs border-primary text-primary hover:bg-primary hover:text-white mr-2" onClick={() => { setPackagingBatch(r.batch); setPackagingId(r._id); }}>
+                    <Button variant="outline" size="sm" className="h-8 text-xs border-primary text-primary hover:bg-primary hover:text-white mr-2" onClick={() => { 
+                      setPackagingBatch(r.batch); 
+                      setPackagingId(r._id);
+                      setTimeout(() => {
+                        document.getElementById("packaging-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }, 100);
+                    }}>
                       Packaging
                     </Button>
                   )}

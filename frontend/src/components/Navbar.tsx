@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { 
-  Bell, 
   Menu, 
   X, 
   LayoutDashboard, 
@@ -11,10 +10,13 @@ import {
   CircleDollarSign, 
   TrendingUp, 
   Moon,
-  Sun
+  Sun,
+  LogOut
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "./ThemeProvider";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 const navItems = [
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
@@ -27,8 +29,16 @@ const navItems = [
 
 export default function Navbar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [logoutOpen, setLogoutOpen] = useState(false);
   const { theme, setTheme } = useTheme();
+
+  const handleLogout = () => {
+    localStorage.removeItem("pinaka_token");
+    localStorage.removeItem("pinaka_user");
+    navigate("/login", { replace: true });
+  };
 
   const isActive = (path?: string) => {
     if (!path) return false;
@@ -115,14 +125,22 @@ export default function Navbar() {
           
           <div className="h-8 w-px bg-border hidden sm:block mx-1"></div>
 
-          <button className="relative min-h-[44px] min-w-[44px] p-2 rounded-full hover:bg-muted transition-colors group flex items-center justify-center">
-            <Bell className="h-[24px] w-[24px] text-muted-foreground group-hover:text-foreground transition-colors" strokeWidth={1.5} />
-            <span className="absolute top-2 right-2 h-2.5 w-2.5 bg-primary rounded-full" style={{border: '2px solid var(--navbar-bg)'}} />
+          <button
+            onClick={() => navigate("/profile")}
+            className="h-[44px] w-[44px] rounded-full flex items-center justify-center text-sm font-bold ring-2 ring-transparent cursor-pointer hover:ring-primary/40 transition-all flex-shrink-0"
+            style={{backgroundColor: 'var(--primary)', color: '#FFFFFF'}}
+            title="My Profile"
+          >
+            {(JSON.parse(localStorage.getItem("pinaka_user") || '{"name":"BM"}').name || "BM").slice(0, 2).toUpperCase()}
           </button>
-          
-          <div className="h-[44px] w-[44px] rounded-full flex items-center justify-center text-sm font-bold ring-2 ring-transparent cursor-pointer hover:ring-primary/20 transition-all flex-shrink-0" style={{backgroundColor: 'var(--primary)', color: '#FFFFFF'}}>
-            BM
-          </div>
+
+          <button
+            onClick={() => setLogoutOpen(true)}
+            title="Logout"
+            className="min-h-[44px] min-w-[44px] p-2 rounded-full hover:bg-destructive/10 transition-colors group flex items-center justify-center"
+          >
+            <LogOut className="h-[22px] w-[22px] text-muted-foreground group-hover:text-destructive transition-colors" strokeWidth={1.5} />
+          </button>
 
           <button
             className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center p-2 rounded-sm hover:bg-muted text-muted-foreground hover:text-foreground"
@@ -156,6 +174,28 @@ export default function Navbar() {
           })}
         </nav>
       )}
+
+      {/* Logout Confirmation Dialog */}
+      <Dialog open={logoutOpen} onOpenChange={setLogoutOpen}>
+        <DialogContent className="sm:max-w-[360px]">
+          <DialogHeader>
+            <DialogTitle>Logout</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to log out of Pinaka?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" className="rounded-sm font-bold" onClick={() => setLogoutOpen(false)}>Cancel</Button>
+            <Button
+              className="bg-primary hover:bg-primary/80 text-white font-bold rounded-sm shadow-none"
+              onClick={handleLogout}
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Yes, Logout
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 }

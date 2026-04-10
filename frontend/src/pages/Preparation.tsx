@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,46 +46,76 @@ export default function Preparation() {
   const [bonelessCurry, setBonelessCurry] = useState("");
   const [fryOutput, setFryOutput] = useState("");
   const [curryOutput, setCurryOutput] = useState("");
+  const [isFryOverride, setIsFryOverride] = useState(false);
+  const [isCurryOverride, setIsCurryOverride] = useState(false);
+
+  // Auto-calculate fryOutput
+  useEffect(() => {
+    if (!isFryOverride) {
+      const b = Number(boneFry) || 0;
+      const bl = Number(bonelessFry) || 0;
+      const val = b + bl;
+      setFryOutput(val > 0 ? val.toString() : "");
+    }
+  }, [boneFry, bonelessFry, isFryOverride]);
+
+  // Auto-calculate curryOutput
+  useEffect(() => {
+    if (!isCurryOverride) {
+      const b = Number(boneCurry) || 0;
+      const bl = Number(bonelessCurry) || 0;
+      const val = b + bl;
+      setCurryOutput(val > 0 ? val.toString() : "");
+    }
+  }, [boneCurry, bonelessCurry, isCurryOverride]);
 
   const todayStr = new Date().toISOString().split("T")[0];
 
-  const handleSavePrep = async () => {
-    const b_fry = Number(boneFry) || 0;
-    const bl_fry = Number(bonelessFry) || 0;
-    const b_curry = Number(boneCurry) || 0;
-    const bl_curry = Number(bonelessCurry) || 0;
-    const out_fry = Number(fryOutput) || 0;
-    const out_curry = Number(curryOutput) || 0;
+  const totalBoneIn = invIn.reduce((s: any, r: any) => s + (Number(r.bone) || 0), 0);
+  const overallBoneUsed = records.reduce((s: any, r: any) => s + (Number(r.boneUsed) || 0), 0);
+  const availBone = Math.max(0, totalBoneIn - overallBoneUsed);
 
-    if (!b_fry && !bl_fry && !b_curry && !bl_curry && !out_fry && !out_curry) {
-      toast({ title: "Error", description: "Empty preparation entry.", variant: "destructive" });
+  const totalBonelessIn = invIn.reduce((s: any, r: any) => s + (Number(r.boneless) || 0), 0);
+  const overallBonelessUsed = records.reduce((s: any, r: any) => s + (Number(r.bonelessUsed) || 0), 0);
+  const availBoneless = Math.max(0, totalBonelessIn - overallBonelessUsed);
+
+  const b_fry = Number(boneFry) || 0;
+  const bl_fry = Number(bonelessFry) || 0;
+  const b_curry = Number(boneCurry) || 0;
+  const bl_curry = Number(bonelessCurry) || 0;
+  
+  const total_bone_used = b_fry + b_curry;
+  const total_boneless_used = bl_fry + bl_curry;
+  const totalInputCalculated = total_bone_used + total_boneless_used;
+
+  const isExceedingBone = total_bone_used > availBone;
+  const isExceedingBoneless = total_boneless_used > availBoneless;
+
+  const handleSavePrep = async () => {
+    
+    if (totalInputCalculated === 0) {
+      toast({ title: "Submission Error", description: "Please enter preparation quantities", variant: "destructive" });
       return;
     }
 
-    const total_bone_used = b_fry + b_curry;
-    const total_boneless_used = bl_fry + bl_curry;
+    // Auto-calculate if user cleared or didn't set output fields
+    let out_fry = fryOutput === "" ? 0 : Number(fryOutput);
+    let out_curry = curryOutput === "" ? 0 : Number(curryOutput);
 
-    // Available Bone Check
-    const totalBoneIn = invIn.reduce((s: any, r: any) => s + (Number(r.bone) || 0), 0);
-    const totalBonelessIn = invIn.reduce((s: any, r: any) => s + (Number(r.boneless) || 0), 0);
-    
-    // Overall Used from preparations (since we don't have sales yet, we just check total used by past prep)
-    const overallBoneUsed = records.reduce((s: any, r: any) => s + (Number(r.boneUsed) || 0), 0);
-    const availBone = totalBoneIn - overallBoneUsed;
-
-    const overallBonelessUsed = records.reduce((s: any, r: any) => s + (Number(r.bonelessUsed) || 0), 0);
-    const availBoneless = totalBonelessIn - overallBonelessUsed;
-
-    if (total_bone_used > availBone) {
-      toast({ title: "Error", description: `Insufficient raw stock (Bone). Only ${availBone} kg available. Attempting save anyway.`, variant: "destructive" });
+    if (out_fry === 0 && (b_fry > 0 || bl_fry > 0)) {
+      out_fry = b_fry + bl_fry;
     }
-    
-    if (total_boneless_used > availBoneless) {
-      toast({ title: "Error", description: `Insufficient raw stock (Boneless). Only ${availBoneless} kg available. Attempting save anyway.`, variant: "destructive" });
+    if (out_curry === 0 && (b_curry > 0 || bl_curry > 0)) {
+      out_curry = b_curry + bl_curry;
     }
 
-    if ((out_fry + out_curry) > (total_bone_used + total_boneless_used)) {
-      toast({ title: "Warning", description: "Output exceeds input! Adding anyway.", variant: "default" });
+    if (isExceedingBone || isExceedingBoneless) {
+      toast({ 
+        title: "Stock Alert", 
+        description: "Not enough stock in shop inventory. Please review quantities.", 
+        variant: "destructive" 
+      });
+      return;
     }
 
     const payload = {
@@ -100,11 +131,25 @@ export default function Preparation() {
     try {
       await api.post(`/shops/${id}/preparations`, payload);
       toast({ title: "Success", description: "Preparation data recorded successfully." });
-      setBoneFry(""); setBonelessFry(""); setBoneCurry(""); setBonelessCurry(""); setFryOutput(""); setCurryOutput("");
+      setBoneFry(""); setBonelessFry(""); setBoneCurry(""); setBonelessCurry(""); 
+      setFryOutput(""); setCurryOutput("");
+      setIsFryOverride(false); setIsCurryOverride(false);
       fetchData();
-    } catch (err) {
-      console.error(err);
-      toast({ title: "Error", description: "Failed to save preparation record.", variant: "destructive" });
+    } catch (err: any) {
+      if (err.response?.status !== 400) {
+        console.error(err);
+      }
+      
+      let errorMsg = err.response?.data?.message || "Failed to submit preparation";
+      if (errorMsg === "Insufficient stock for preparation") {
+        errorMsg = "Not enough stock in shop inventory";
+      }
+
+      toast({ 
+        title: "Submission Error", 
+        description: errorMsg, 
+        variant: "destructive" 
+      });
     }
   };
 
@@ -119,6 +164,7 @@ export default function Preparation() {
       toast({ title: "Error", description: "Failed to delete record.", variant: "destructive" });
     }
   };
+
 
   return (
     <div className="rounded-sm border bg-card shadow-none mb-8 overflow-hidden animate-fade-in w-full max-w-full">
@@ -142,22 +188,34 @@ export default function Preparation() {
               <h4 className="text-sm font-bold uppercase tracking-widest text-muted-foreground mb-4 border-b pb-2">Raw Usage</h4>
               <div className="grid grid-cols-2 gap-4 md:gap-6">
                 <div className="space-y-2">
-                  <Label className="text-lg font-semibold">Bone for Fry (kg)</Label>
-                  <Input type="number" className="h-[56px] text-2xl font-bold border-2 focus-visible:ring-primary focus-visible:border-primary px-4 shadow-none" value={boneFry} onChange={(e) => setBoneFry(e.target.value)} placeholder="0" />
+                  <div className="flex justify-between items-center">
+                    <Label className="text-lg font-semibold">Bone for Fry (kg)</Label>
+                    <span className={cn("text-xs font-bold", isExceedingBone ? "text-destructive" : "text-muted-foreground")}>{availBone} kg avail</span>
+                  </div>
+                  <Input type="number" className={cn("h-[56px] text-2xl font-bold border-2 focus-visible:ring-primary focus-visible:border-primary px-4 shadow-none", isExceedingBone && "border-destructive focus-visible:ring-destructive focus-visible:border-destructive")} value={boneFry} onChange={(e) => setBoneFry(e.target.value)} placeholder="0" />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-lg font-semibold">Boneless for Fry (kg)</Label>
-                  <Input type="number" className="h-[56px] text-2xl font-bold border-2 focus-visible:ring-primary focus-visible:border-primary px-4 shadow-none" value={bonelessFry} onChange={(e) => setBonelessFry(e.target.value)} placeholder="0" />
+                  <div className="flex justify-between items-center">
+                    <Label className="text-lg font-semibold">Boneless for Fry (kg)</Label>
+                    <span className={cn("text-xs font-bold", isExceedingBoneless ? "text-destructive" : "text-muted-foreground")}>{availBoneless} kg avail</span>
+                  </div>
+                  <Input type="number" className={cn("h-[56px] text-2xl font-bold border-2 focus-visible:ring-primary focus-visible:border-primary px-4 shadow-none", isExceedingBoneless && "border-destructive focus-visible:ring-destructive focus-visible:border-destructive")} value={bonelessFry} onChange={(e) => setBonelessFry(e.target.value)} placeholder="0" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4 md:gap-6">
                 <div className="space-y-2">
-                  <Label className="text-lg font-semibold">Bone for Curry (kg)</Label>
-                  <Input type="number" className="h-[56px] text-2xl font-bold border-2 focus-visible:ring-primary focus-visible:border-primary px-4 shadow-none" value={boneCurry} onChange={(e) => setBoneCurry(e.target.value)} placeholder="0" />
+                  <div className="flex justify-between items-center">
+                    <Label className="text-lg font-semibold">Bone for Curry (kg)</Label>
+                    <span className={cn("text-xs font-bold", isExceedingBone ? "text-destructive" : "text-muted-foreground")}>{availBone} kg avail</span>
+                  </div>
+                  <Input type="number" className={cn("h-[56px] text-2xl font-bold border-2 focus-visible:ring-primary focus-visible:border-primary px-4 shadow-none", isExceedingBone && "border-destructive focus-visible:ring-destructive focus-visible:border-destructive")} value={boneCurry} onChange={(e) => setBoneCurry(e.target.value)} placeholder="0" />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-lg font-semibold">Boneless for Curry (kg)</Label>
-                  <Input type="number" className="h-[56px] text-2xl font-bold border-2 focus-visible:ring-primary focus-visible:border-primary px-4 shadow-none" value={bonelessCurry} onChange={(e) => setBonelessCurry(e.target.value)} placeholder="0" />
+                  <div className="flex justify-between items-center">
+                    <Label className="text-lg font-semibold">Boneless for Curry (kg)</Label>
+                    <span className={cn("text-xs font-bold", isExceedingBoneless ? "text-destructive" : "text-muted-foreground")}>{availBoneless} kg avail</span>
+                  </div>
+                  <Input type="number" className={cn("h-[56px] text-2xl font-bold border-2 focus-visible:ring-primary focus-visible:border-primary px-4 shadow-none", isExceedingBoneless && "border-destructive focus-visible:ring-destructive focus-visible:border-destructive")} value={bonelessCurry} onChange={(e) => setBonelessCurry(e.target.value)} placeholder="0" />
                 </div>
               </div>
             </div>
@@ -166,25 +224,48 @@ export default function Preparation() {
             <div className="space-y-5 border-2 p-5 bg-secondary/20 rounded-sm shadow-none">
               <h4 className="text-sm font-bold uppercase tracking-widest text-muted-foreground mb-4 border-b pb-2">Prepared Output</h4>
               <div className="grid grid-cols-1 gap-6">
-                <div className="space-y-2">
+                <div className="space-y-2 text-center md:text-left">
                   <Label className="text-lg font-bold">Fry Output (kg)</Label>
-                  <Input type="number" className="h-[56px] text-3xl font-black border-2 focus-visible:ring-primary focus-visible:border-primary px-4 shadow-none text-info" value={fryOutput} onChange={(e) => setFryOutput(e.target.value)} placeholder="0" />
+                  <Input type="number" 
+                    className={cn("h-[56px] text-3xl font-black border-2 focus-visible:ring-primary focus-visible:border-primary px-4 shadow-none text-info", isFryOverride && "border-amber-400 bg-amber-50/30")} 
+                    value={fryOutput} 
+                    onChange={(e) => { 
+                      setFryOutput(e.target.value); 
+                      setIsFryOverride(true); 
+                    }} 
+                    placeholder="0" 
+                  />
+                  <p className="text-[10px] text-muted-foreground italic font-medium">Auto-calculated (editable)</p>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 text-center md:text-left">
                   <Label className="text-lg font-bold">Curry Output (kg)</Label>
-                  <Input type="number" className="h-[56px] text-3xl font-black border-2 focus-visible:ring-primary focus-visible:border-primary px-4 shadow-none text-info" value={curryOutput} onChange={(e) => setCurryOutput(e.target.value)} placeholder="0" />
+                  <Input type="number" 
+                    className={cn("h-[56px] text-3xl font-black border-2 focus-visible:ring-primary focus-visible:border-primary px-4 shadow-none text-info", isCurryOverride && "border-amber-400 bg-amber-50/30")} 
+                    value={curryOutput} 
+                    onChange={(e) => { 
+                      setCurryOutput(e.target.value); 
+                      setIsCurryOverride(true); 
+                    }} 
+                    placeholder="0" 
+                  />
+                  <p className="text-[10px] text-muted-foreground italic font-medium">Auto-calculated (editable)</p>
                 </div>
               </div>
             </div>
           </div>
           
           <div className="flex justify-end pt-5 text-lg text-muted-foreground mr-2 font-black border-t mt-4">
-             Total Used: {Number(boneFry || 0) + Number(bonelessFry || 0) + Number(boneCurry || 0) + Number(bonelessCurry || 0)} kg &nbsp;|&nbsp; 
-             Output: {Number(fryOutput || 0) + Number(curryOutput || 0)} kg
+             Total Used: {totalInputCalculated} kg &nbsp;|&nbsp; 
+             Output: {(Number(fryOutput) || (Number(boneFry) || 0) + (Number(bonelessFry) || 0)) + 
+                      (Number(curryOutput) || (Number(boneCurry) || 0) + (Number(bonelessCurry) || 0))} kg
           </div>
           
           <div className="flex justify-end pt-4">
-            <Button onClick={handleSavePrep} className="w-full md:w-auto h-[60px] text-xl bg-primary hover:bg-primary/80 font-bold text-white shadow-none px-12">
+            <Button 
+              onClick={handleSavePrep} 
+              disabled={totalInputCalculated === 0 || isExceedingBone || isExceedingBoneless}
+              className="w-full md:w-auto h-[60px] text-xl bg-primary hover:bg-primary/80 font-bold text-white shadow-none px-12 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               Save Preparation
             </Button>
           </div>

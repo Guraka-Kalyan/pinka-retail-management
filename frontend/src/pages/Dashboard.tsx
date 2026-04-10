@@ -405,17 +405,21 @@ export default function Dashboard() {
   return (
     <div className="animate-fade-in pb-16 w-full space-y-5">
 
-      {/* ── SHOP NOTES TICKER ── */}
+      {/* ── SHOP NOTES CARDS ── */}
       {notesList.length > 0 && (
-        <div className="w-full bg-card border border-border rounded-sm px-4 py-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-          <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground shrink-0">Shop Notes</span>
-          {notesList.map((n, i) => (
-            <span key={i} className="flex items-center gap-1.5">
-              {i > 0 && <span className="text-border">|</span>}
-              <span className="font-black text-xs" style={{ color: C_PRIMARY }}>{n.shopName} →</span>
-              <span className="text-foreground text-xs">{n.text}</span>
-            </span>
-          ))}
+        <div className="w-full mb-2">
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Shop Notes</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+            {notesList.map((n, i) => (
+              <div key={i} className="bg-primary/5 border border-primary/20 rounded-md p-4 shadow-sm">
+                <div className="flex items-center gap-2 mb-2 border-b border-primary/10 pb-2">
+                  <span className="text-xl">📌</span>
+                  <span className="text-[18px] font-bold" style={{ color: C_PRIMARY }}>{n.shopName}</span>
+                </div>
+                <p className="text-[16px] text-foreground leading-relaxed">{n.text}</p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

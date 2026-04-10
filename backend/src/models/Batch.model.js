@@ -35,9 +35,10 @@ const batchSchema = new mongoose.Schema({
 
   // Packaging
   pkgItems: {
-    bone: { type: Number, default: 0 },
-    boneless: { type: Number, default: 0 },
-    mixed: { type: Number, default: 0 },
+    mixed: {
+      qty: { type: Number, default: 0 },
+      pricePerKg: { type: Number, default: 0 },
+    },
   },
 }, { timestamps: true });
 
