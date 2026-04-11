@@ -36,7 +36,15 @@ export default function Login() {
       if (response.data.success) {
         localStorage.setItem("pinaka_token", response.data.token);
         localStorage.setItem("pinaka_user", JSON.stringify(response.data.user));
-        navigate("/dashboard");
+        
+        const userRole = response.data.user.role;
+        if (userRole === "Admin") {
+          navigate("/dashboard");
+        } else if (userRole === "shopstaff") {
+          navigate("/daily");
+        } else {
+          navigate("/sales");
+        }
       }
     } catch (err: any) {
       setError(err.response?.data?.message || "Login failed. Please try again.");

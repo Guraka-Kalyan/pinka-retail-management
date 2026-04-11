@@ -23,7 +23,7 @@ const login = async (req, res) => {
   res.json({
     success: true,
     token,
-    user: { id: user._id, name: user.name, username: user.username || user.name, role: user.role },
+    user: { id: user._id, name: user.name, username: user.username || user.name, role: user.role, assignedShop: user.assignedShop },
   });
 };
 
@@ -37,6 +37,7 @@ const getMe = async (req, res) => {
       name: req.user.name,
       username: req.user.username || req.user.name,
       role: req.user.role,
+      assignedShop: req.user.assignedShop,
     },
   });
 };
