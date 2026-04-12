@@ -20,17 +20,25 @@ export default function Daily() {
     const fetchShops = async () => {
       try {
         const res = await api.get("/shops");
-        const mapped = res.data.data.map((s: any) => ({ id: s._id, name: s.name }));
-        setShopsList(mapped);
+        let mapped = res.data.data.map((s: any) => ({ id: s._id, name: s.name }));
 
         const userStr = localStorage.getItem("pinaka_user");
         if (userStr) {
           const user = JSON.parse(userStr);
-          if (user.assignedShop) {
+          
+          if (user.shopAccess === "specific" && user.assignedShops) {
+            mapped = mapped.filter((s: any) => user.assignedShops.includes(s.id));
+          }
+          
+          setShopsList(mapped);
+
+          if (user.assignedShop && mapped.some((s: any) => s.id === user.assignedShop)) {
             setSelectedShop(user.assignedShop);
           } else if (mapped.length > 0) {
             setSelectedShop(mapped[0].id);
           }
+        } else {
+          setShopsList(mapped);
         }
       } catch {
         toast({ title: "Error", description: "Failed to load shops.", variant: "destructive" });

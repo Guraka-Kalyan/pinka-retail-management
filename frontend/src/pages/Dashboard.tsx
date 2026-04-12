@@ -67,7 +67,7 @@ interface BatchRec  {
 interface SupplyRec { _id: string; shopId: { _id: string } | null; externalRecipient: { name: string }; batch: string; total: number; totalAmount: number; date: string; bone?: number; boneless?: number; mixed?: number; }
 interface SaleRec   { shopId: string; date: string; billId: string; cash: number; phonePe: number; total: number; discountGiven: number; boneSold?: number; bonelessSold?: number; mixedSold?: number; frySold?: number; currySold?: number; }
 interface CostRec   { shopId: string; date: string; total: number; }
-interface InvInRec  { shopId: string; batch: string; date: string; totalAmount: number; totalWeight?: number; total_weight?: number; type?: string; supplyId?: string; transport?: string; }
+interface InvInRec  { shopId: string; batch: string; date: string; totalAmount: number; totalWeight?: number; total_weight?: number; type?: string; supplyId?: string; transport?: string; vendorName?: string; }
 
 // ── Tooltip components ────────────────────────────────────────────────────────
 const WfTooltip = ({ active, payload }: any) => {
@@ -181,10 +181,12 @@ const GenTooltip = ({ active, payload, label }: any) => {
 const ShopSalesTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
+  const validPayload = payload.filter((p: any) => p.value !== 0 || p.dataKey === 'salesValue' || p.dataKey === 'discount');
+  
   return (
     <div className="bg-card border border-border rounded-sm p-3 text-xs shadow min-w-[200px] space-y-1 z-50">
       <p className="font-bold mb-2 pb-1 border-b text-[11px] uppercase">{label}</p>
-      {payload.map((p: any) => (
+      {validPayload.map((p: any) => (
         <div key={p.name} className="flex justify-between gap-4">
           <span style={{ color: p.color }}>{p.name}</span>
           <span className="font-semibold">{p.value?.toLocaleString("en-IN")}</span>
@@ -192,8 +194,16 @@ const ShopSalesTooltip = ({ active, payload, label }: any) => {
       ))}
       {(d.inventoryInKg > 0 || d.externalAddedKg > 0) && (
         <div className="mt-2 pt-2 border-t text-[10px] text-muted-foreground flex flex-col gap-1">
-          {d.inventoryInKg > 0 && <div className="flex justify-between"><span>Inv Weight:</span> <span className="font-bold text-foreground">{d.inventoryInKg.toFixed(1)} kg</span></div>}
-          {d.externalAddedKg > 0 && <div className="flex justify-between"><span>Ext Weight:</span> <span className="font-bold text-foreground">{d.externalAddedKg.toFixed(1)} kg</span></div>}
+          {d.inventoryInKg > 0 
+            ? <div className="flex justify-between"><span>Inv Weight:</span> <span className="font-bold text-foreground">{d.inventoryInKg.toFixed(1)} kg</span></div>
+            : d.externalAddedKg > 0 && <div className="flex justify-between"><span>Ext Weight:</span> <span className="font-bold text-foreground">{d.externalAddedKg.toFixed(1)} kg</span></div>
+          }
+          {d.salesWeightKg > 0 && (
+            <div className="flex justify-between">
+              <span>Weight Sold:</span>
+              <span className="font-bold text-green-400">{d.salesWeightKg.toFixed(1)} kg</span>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -625,62 +635,83 @@ export default function Dashboard() {
 
   // ── SECTION 4 — Shop Sales per batch ─────────────────────────────────────
   const shopSalesData = useMemo(() => {
-    // 1. Group total inventory value received by each shop over this period
-    const shopInvTotals: Record<string, number> = {};
-    fInvIn.forEach(i => {
-      shopInvTotals[i.shopId] = (shopInvTotals[i.shopId] || 0) + (i.totalAmount || 0);
-    });
-
-    // 2. Initialize batchMap to hold internal vs external values
     const batchMap: Record<string, {
-      name: string; inventoryIn: number; externalAdded: number; 
+      name: string; inventoryIn: number; externalAdded: number;
       inventoryInKg: number; externalAddedKg: number;
       salesValue: number; discount: number; shopProfit: number;
+      salesWeightKg: number;
     }> = {};
 
-    batches.forEach(b => {
-      batchMap[b.batchNo] = { name: b.batchNo, inventoryIn: 0, externalAdded: 0, inventoryInKg: 0, externalAddedKg: 0, salesValue: 0, discount: 0, shopProfit: 0 };
+    // Process each shop independently using FIFO
+    const shopIds = [...new Set(fInvIn.map(i => i.shopId))];
+
+    shopIds.forEach(shopId => {
+      const shopName = shops.find(s => s._id === shopId)?.name || 'Shop';
+
+      // Sort this shop's inventory oldest-first (FIFO order)
+      const shopInventory = fInvIn
+        .filter(i => i.shopId === shopId)
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      // Actual shop totals from POS sales records
+      const shopSalesRecords = fSales.filter(s => s.shopId === shopId);
+      const totalSalesRevenue = shopSalesRecords.reduce((a, s) => a + (s.total || 0), 0);
+      const totalDiscount     = shopSalesRecords.reduce((a, s) => a + (s.discountGiven || 0), 0);
+      const totalSoldKg       = shopSalesRecords.reduce((a, s) =>
+        a + (s.boneSold || 0) + (s.bonelessSold || 0) + (s.frySold || 0) + (s.currySold || 0) + (s.mixedSold || 0), 0);
+
+      // ── FIFO: consume batches oldest first ────────────────────────────────
+      let remainingKg = totalSoldKg;
+      const fifoAllocations: { key: string; allocatedKg: number }[] = [];
+
+      shopInventory.forEach(i => {
+        const isExt    = i.type === 'external';
+        const barLabel = isExt
+          ? `${i.vendorName || 'Vendor'} (${shopName})`
+          : `${i.batch} (${shopName})`;
+        const key      = `${i.batch}_${shopId}`;
+        const batchKg  = i.totalWeight || 0;
+        const batchAmt = i.totalAmount || 0;
+
+        // Initialise slot
+        if (!batchMap[key]) {
+          batchMap[key] = { name: barLabel, inventoryIn: 0, externalAdded: 0, inventoryInKg: 0, externalAddedKg: 0, salesValue: 0, discount: 0, shopProfit: 0, salesWeightKg: 0 };
+        }
+
+        if (isExt) {
+          batchMap[key].externalAdded   += batchAmt;
+          batchMap[key].externalAddedKg += batchKg;
+        } else {
+          batchMap[key].inventoryIn   += batchAmt;
+          batchMap[key].inventoryInKg += batchKg;
+        }
+
+        // How much of this batch did FIFO consume?
+        const consumed  = Math.min(remainingKg, batchKg);
+        remainingKg     = Math.max(0, remainingKg - batchKg);
+        fifoAllocations.push({ key, allocatedKg: consumed });
+      });
+
+      // ── Distribute revenue by FIFO kg share ──────────────────────────────
+      const totalAllocatedKg = fifoAllocations.reduce((a, f) => a + f.allocatedKg, 0);
+
+      fifoAllocations.forEach(({ key, allocatedKg }) => {
+        if (totalAllocatedKg === 0) return;
+        const ratio = allocatedKg / totalAllocatedKg;
+        batchMap[key].salesValue    += totalSalesRevenue * ratio;
+        batchMap[key].discount      += totalDiscount     * ratio;
+        batchMap[key].salesWeightKg += allocatedKg; // exact FIFO kg
+      });
     });
 
-    // 3. Process fInvIn to populate batch Inventory (Central vs External) and apportion sales
-    fInvIn.forEach(i => {
-      if (!batchMap[i.batch]) {
-        batchMap[i.batch] = { name: i.batch, inventoryIn: 0, externalAdded: 0, inventoryInKg: 0, externalAddedKg: 0, salesValue: 0, discount: 0, shopProfit: 0 };
-      }
-      
-      const amt = i.totalAmount || 0;
-      const weight = i.totalWeight || i.total_weight || 0;
-      if (i.type === 'external') {
-        batchMap[i.batch].externalAdded += amt;
-        batchMap[i.batch].externalAddedKg += weight;
-      } else {
-        batchMap[i.batch].inventoryIn += amt;
-        batchMap[i.batch].inventoryInKg += weight;
-      }
-
-      // Apportion Sales and Discount for this specific piece of inventory to this batch
-      const shopTotalInv = shopInvTotals[i.shopId] || 1; // avoid divide by zero
-      const valueRatio = amt / shopTotalInv;
-
-      // Find total sales and discount for this shop during the whole period
-      const shopSales = fSales.filter(s => s.shopId === i.shopId).reduce((a, s) => a + (s.total || 0), 0);
-      const shopDiscount = fSales.filter(s => s.shopId === i.shopId).reduce((a, s) => a + (s.discountGiven || 0), 0);
-
-      // Distribute based on the value proportion this batch holds in the shop's total inventory
-      batchMap[i.batch].salesValue += shopSales * valueRatio;
-      batchMap[i.batch].discount += shopDiscount * valueRatio;
-    });
-
-    // 4. Calculate Final Profit/Loss per batch
+    // Final profit per batch
     Object.values(batchMap).forEach(b => {
-      const inventoryValue = b.inventoryIn + b.externalAdded;
-      const totalIncome = b.salesValue;
-      const totalExpense = inventoryValue + b.discount;
-      b.shopProfit = totalIncome - totalExpense;
+      b.shopProfit = b.salesValue - (b.inventoryIn + b.externalAdded) - b.discount;
     });
 
     return Object.values(batchMap).filter(b => b.inventoryIn > 0 || b.externalAdded > 0 || b.salesValue > 0);
-  }, [batches, fInvIn, fSales]);
+  }, [fInvIn, fSales, shops]);
+
 
   // ── Notes grouped by shop ─────────────────────────────────────────────────
   const notesGrouped = useMemo(() => {

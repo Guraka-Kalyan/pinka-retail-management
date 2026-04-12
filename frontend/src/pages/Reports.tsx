@@ -7,10 +7,12 @@ import { Input } from "@/components/ui/input";
 import { AdvancedDatePicker } from "@/components/ui/advanced-date-picker";
 import {
   IndianRupee, Store, Package, Wallet, Smartphone,
-  AlertTriangle, Download, Beef, Loader2, ArrowUpRight, ArrowDownRight
+  AlertTriangle, Beef, Loader2, ArrowUpRight, ArrowDownRight
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import api from "@/lib/api";
+
+import { downloadReportsPDF, downloadReportsExcel } from "@/utils/exportReports";
 
 export default function Reports() {
   const [dateRange, setDateRange] = useState<"Today" | "This Week" | "This Month" | "Custom">("This Month");
@@ -88,22 +90,16 @@ export default function Reports() {
     }
   };
 
-  const handleDownloadCSV = () => {
-    if (!analyticsData || !analyticsData.dailySalesLog) return;
-    
-    const headers = "Date,Shop,Bone(kg),Boneless(kg),Fry(kg),Curry(kg),Mixed(kg),Total(₹)";
-    const rows = analyticsData.dailySalesLog.map((r: any) => 
-      `${r.date},${r.shopName},${r.boneSold||0},${r.bonelessSold||0},${r.frySold||0},${r.currySold||0},${r.mixedSold||0},${r.total||0}`
-    );
-    const csv = [headers, ...rows].join("\n");
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", `reports_${dateRange.replace(" ", "_").toLowerCase()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleExportPDF = (type: "executive" | "detailed") => {
+    if (!analyticsData) return;
+    const periodStr = dateRange === "Custom" ? `${customStart} to ${customEnd}` : dateRange;
+    downloadReportsPDF(analyticsData, type, periodStr);
+  };
+
+  const handleExportExcel = () => {
+    if (!analyticsData) return;
+    const periodStr = dateRange === "Custom" ? `${customStart} to ${customEnd}` : dateRange;
+    downloadReportsExcel(analyticsData, periodStr);
   };
 
   const currentShopName = useMemo(() => {
@@ -159,56 +155,51 @@ export default function Reports() {
 
   return (
     <div className="animate-fade-in pb-12 w-full">
-      {/* HEADER */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-4 mb-6">
+      {/* ── DATE HEADER ── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-card border-b border-border p-4 -mx-6 -mt-6 mb-6">
         <div>
-          <Breadcrumb items={[{ label: "Reports" }]} />
-          <h1 className="text-2xl md:text-3xl font-black text-foreground tracking-tight mt-2">Reports & Analytics</h1>
-          <p className="text-sm text-muted-foreground mt-1 font-medium">Performance across {currentShopName}</p>
+          <h1 className="text-xl font-black text-foreground uppercase tracking-tight">Reports &amp; Analytics</h1>
+          <p className="text-[10px] text-muted-foreground mt-0.5 uppercase tracking-wide font-bold">Performance across {currentShopName}</p>
         </div>
-        <Button onClick={handleDownloadCSV} variant="outline" className="gap-2 h-10 md:h-[44px] rounded-sm font-bold bg-card border-[var(--border)] shadow-none w-full lg:w-auto hover:text-primary hover:border-primary/30 transition-all">
-          <Download className="h-4 w-4" /> Download CSV
-        </Button>
-      </div>
+        <div className="flex flex-wrap items-center gap-3">
 
-      {/* GLOBAL FILTERS */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-card p-3 md:p-4 rounded-sm border border-[var(--border)] shadow-none mb-6">
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-2 w-full lg:w-auto">
-          <select 
-            className="h-10 md:min-h-[44px] px-3 border border-input bg-background text-foreground text-sm font-bold rounded-sm shadow-none focus:outline-none focus:ring-1 focus:ring-primary w-full lg:w-[200px]"
+          {/* Shop selector */}
+          <select
+            className="h-9 px-3 border border-input bg-background text-foreground text-sm font-bold rounded-sm shadow-none focus:outline-none focus:ring-1 focus:ring-primary min-w-[140px]"
             value={selectedShop}
             onChange={(e) => setSelectedShop(e.target.value)}
           >
             <option value="all" className="bg-background text-foreground">All Shops</option>
-            {shops.map(s => <option key={s._id} value={s._id} className="bg-background text-foreground">{s.name} ({s.location})</option>)}
+            {shops.map(s => <option key={s._id} value={s._id} className="bg-background text-foreground">{s.name}</option>)}
           </select>
 
-          <div className="bg-muted/50 p-1 rounded-sm flex flex-wrap gap-1 items-center shadow-none border border-input/50 w-full lg:w-auto">
-            {["Today", "This Week", "This Month", "Custom"].map(t => (
+          {/* Timeframe buttons */}
+          <div className="flex flex-wrap items-center gap-2 bg-primary/5 rounded-md p-1 border border-primary/10 w-fit">
+            {(["Today", "This Week", "This Month", "Custom"] as const).map(t => (
               <button
                 key={t}
                 onClick={() => setDateRange(t as any)}
                 className={cn(
-                  "whitespace-nowrap flex-1 lg:flex-none min-h-[36px] md:min-h-[40px] px-3 md:px-5 rounded-sm text-xs md:text-sm font-bold transition-all",
-                  dateRange === t ? "bg-primary text-primary-foreground shadow-none" : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                  "px-4 py-1.5 rounded-sm text-sm font-bold transition-all whitespace-nowrap",
+                  dateRange === t ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground hover:bg-primary/10"
                 )}
-              >
-                {t}
-              </button>
+              >{t}</button>
             ))}
           </div>
 
+          {/* Custom date range */}
           {dateRange === "Custom" && (
-            <div className="flex items-center gap-2 w-full lg:w-auto animate-in fade-in slide-in-from-left-4 duration-300">
-              <div className="flex-1 lg:w-[130px]">
-                 <AdvancedDatePicker value={customStart} onChange={setCustomStart} placeholder="Start Date" />
-              </div>
-              <span className="text-muted-foreground font-bold">-</span>
-              <div className="flex-1 lg:w-[130px]">
-                 <AdvancedDatePicker value={customEnd} onChange={setCustomEnd} placeholder="End Date" />
-              </div>
+            <div className="flex items-center gap-2 bg-card border rounded-sm px-3 py-1">
+              <AdvancedDatePicker value={customStart} onChange={setCustomStart} placeholder="Start" />
+              <span className="text-muted-foreground font-bold">–</span>
+              <AdvancedDatePicker value={customEnd} onChange={setCustomEnd} placeholder="End" />
             </div>
           )}
+
+          {/* PDF Export — matches Dashboard exactly */}
+          <Button onClick={() => handleExportPDF("executive")} className="bg-red-500 hover:bg-red-600 text-white rounded-sm h-9 px-3 text-xs font-bold uppercase tracking-wider">
+            PDF Export
+          </Button>
         </div>
       </div>
 

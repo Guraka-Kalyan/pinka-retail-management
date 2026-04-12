@@ -23,7 +23,7 @@ const login = async (req, res) => {
   res.json({
     success: true,
     token,
-    user: { id: user._id, name: user.name, username: user.username || user.name, role: user.role, assignedShop: user.assignedShop },
+    user: { id: user._id, name: user.name, username: user.username || user.name, role: user.role, assignedShop: user.assignedShop, shopAccess: user.shopAccess, assignedShops: user.assignedShops },
   });
 };
 
@@ -38,6 +38,8 @@ const getMe = async (req, res) => {
       username: req.user.username || req.user.name,
       role: req.user.role,
       assignedShop: req.user.assignedShop,
+      shopAccess: req.user.shopAccess,
+      assignedShops: req.user.assignedShops,
     },
   });
 };
@@ -61,7 +63,7 @@ const changePassword = async (req, res) => {
 // @desc   Register a new user (Admin only)
 // @route  POST /api/auth/register
 const register = async (req, res) => {
-  const { name, username, password, role } = req.body;
+  const { name, username, password, role, shopAccess, assignedShops } = req.body;
   if (!name || !password) {
     return res.status(400).json({ success: false, message: 'Name and password are required' });
   }
@@ -74,10 +76,12 @@ const register = async (req, res) => {
     username: username || name,
     role: role || 'Staff',
     passwordHash: password,
+    shopAccess: shopAccess || 'all',
+    assignedShops: assignedShops || [],
   });
   res.status(201).json({
     success: true,
-    data: { id: user._id, name: user.name, username: user.username, role: user.role },
+    data: { id: user._id, name: user.name, username: user.username, role: user.role, shopAccess: user.shopAccess, assignedShops: user.assignedShops },
   });
 };
 

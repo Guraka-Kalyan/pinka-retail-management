@@ -1,8 +1,10 @@
 const express = require('express');
 const { getPreparations, createPreparation, updatePreparation, deletePreparation } = require('../controllers/preparation.controller');
-const { protect } = require('../middleware/auth');
+const { protect, verifyShopAccess } = require('../middleware/auth');
 
 const router = express.Router({ mergeParams: true });
+
+router.use('/:shopId', protect, verifyShopAccess);
 
 router.route('/:shopId/preparations')
   .get(protect, getPreparations)

@@ -25,7 +25,16 @@ const userSchema = new mongoose.Schema({
   assignedShop: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Shop',
-  }
+  },
+  shopAccess: {
+    type: String,
+    enum: ['all', 'specific'],
+    default: 'all'
+  },
+  assignedShops: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Shop'
+  }]
 }, { timestamps: true });
 
 // Hash password before saving

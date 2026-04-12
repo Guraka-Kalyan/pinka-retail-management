@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { User, Lock, Shield, Trash2, Plus, Eye, EyeOff } from "lucide-react";
+import { User, Lock, Shield, Trash2, Plus, Eye, EyeOff, CheckSquare } from "lucide-react";
 import api from "@/lib/api";
 
 interface AppUser {
@@ -21,6 +21,13 @@ interface AppUser {
   name: string;
   username: string;
   role: string;
+  shopAccess?: 'all' | 'specific';
+  assignedShops?: string[];
+}
+
+interface ShopRec {
+  _id: string;
+  name: string;
 }
 
 export default function Profile() {
@@ -58,6 +65,22 @@ export default function Profile() {
   const [users, setUsers] = useState<AppUser[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
 
+  // Shop Access for new user
+  const [newShopAccess, setNewShopAccess] = useState<"all" | "specific">("all");
+  const [newAssignedShops, setNewAssignedShops] = useState<string[]>([]);
+  
+  // Available shops
+  const [shops, setShops] = useState<ShopRec[]>([]);
+  
+  const fetchShops = async () => {
+    try {
+      const res = await api.get("/shops");
+      setShops(res.data.data || []);
+    } catch {
+      // ignore
+    }
+  };
+
   const fetchUsers = async () => {
     if (!isAdmin) return;
     try {
@@ -86,7 +109,10 @@ export default function Profile() {
     };
     fetchMe();
     fetchUsers();
-  }, []);
+    if (isAdmin) {
+      fetchShops();
+    }
+  }, [isAdmin]);
 
   const handleChangePassword = async () => {
     if (!currentPass || !newPass || !confirmPass) {
@@ -120,9 +146,17 @@ export default function Profile() {
     }
     try {
       setIsCreating(true);
-      await api.post("/auth/register", { name: newName, username: newUsername || newName, password: newUserPass, role: newRole });
+      await api.post("/auth/register", { 
+        name: newName, 
+        username: newUsername || newName, 
+        password: newUserPass, 
+        role: newRole,
+        shopAccess: newShopAccess,
+        assignedShops: newShopAccess === "specific" ? newAssignedShops : []
+      });
       toast({ title: "User Created", description: `${newName} has been added as ${newRole}.` });
       setNewName(""); setNewUsername(""); setNewUserPass(""); setNewRole("Staff");
+      setNewShopAccess("all"); setNewAssignedShops([]);
       fetchUsers();
     } catch (err: any) {
       toast({ title: "Error", description: err.response?.data?.message || "Failed to create user.", variant: "destructive" });
@@ -310,7 +344,45 @@ export default function Profile() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Shop Access</Label>
+                <Select value={newShopAccess} onValueChange={(v) => setNewShopAccess(v as any)}>
+                  <SelectTrigger className="h-10 font-medium">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Shops</SelectItem>
+                    <SelectItem value="specific">Specific Shops</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+
+            {newShopAccess === "specific" && (
+              <div className="mb-4 space-y-2 border border-border p-3 rounded-sm bg-muted/20">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Select Allowed Shops</Label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {shops.map((shop) => (
+                    <label key={shop._id} className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                      <input 
+                        type="checkbox"
+                        className="rounded border-input text-primary focus:ring-primary h-4 w-4"
+                        checked={newAssignedShops.includes(shop._id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setNewAssignedShops([...newAssignedShops, shop._id]);
+                          } else {
+                            setNewAssignedShops(newAssignedShops.filter(id => id !== shop._id));
+                          }
+                        }}
+                      />
+                      {shop.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+            
             <Button
               onClick={handleCreateUser}
               disabled={isCreating}
@@ -336,6 +408,7 @@ export default function Profile() {
                       <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Name</th>
                       <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Username</th>
                       <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Role</th>
+                      <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Access</th>
                       <th className="text-right px-4 py-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Actions</th>
                     </tr>
                   </thead>
@@ -361,6 +434,13 @@ export default function Profile() {
                               u.role === "Admin" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
                             }`}>
                               {u.role}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="text-xs font-bold text-muted-foreground uppercase">
+                              {u.shopAccess === "specific" 
+                                ? `${u.assignedShops?.length || 0} Shops`
+                                : "All Shops"}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-right">

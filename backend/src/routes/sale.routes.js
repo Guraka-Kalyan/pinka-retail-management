@@ -1,9 +1,11 @@
 const express = require('express');
 const { getSales, createSale, updateSale, deleteSale, generateReceipt } = require('../controllers/sale.controller');
-const { protect } = require('../middleware/auth');
+const { protect, verifyShopAccess } = require('../middleware/auth');
 const { validate, createSaleSchema } = require('../middleware/validate');
 
 const router = express.Router({ mergeParams: true });
+
+router.use('/:shopId', protect, verifyShopAccess);
 
 router.route('/:shopId/sales')
   .get(protect, getSales)

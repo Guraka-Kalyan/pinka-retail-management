@@ -35,4 +35,26 @@ const requireRole = (...roles) => {
   };
 };
 
-module.exports = { protect, requireRole };
+const verifyShopAccess = (req, res, next) => {
+  // If user doesn't have specific limitations, let them pass
+  if (!req.user || req.user.shopAccess !== 'specific') {
+    return next();
+  }
+
+  const shopId = req.params.shopId;
+  
+  if (!shopId) {
+    return next(); // if no shopId in params, nothing to check here
+  }
+
+  // Ensure assignedShops is an array of strings for comparison
+  const assigned = (req.user.assignedShops || []).map(id => id.toString());
+  
+  if (!assigned.includes(shopId)) {
+    return res.status(403).json({ success: false, message: 'Forbidden. You do not have access to this shop.' });
+  }
+
+  next();
+};
+
+module.exports = { protect, requireRole, verifyShopAccess };
