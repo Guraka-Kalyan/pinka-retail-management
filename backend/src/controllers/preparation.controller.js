@@ -50,45 +50,8 @@ const createPreparation = async (req, res) => {
     return res.status(400).json({ success: false, message: 'Insufficient stock for preparation' });
   }
 
-  // Deduct using FIFO
-  let remainingBoneToDeduct = boneUsed;
-  let remainingBonelessToDeduct = bonelessUsed;
-
-  for (const record of inventoryRecords) {
-    if (remainingBoneToDeduct <= 0 && remainingBonelessToDeduct <= 0) break;
-
-    let updated = false;
-
-    if (remainingBoneToDeduct > 0 && record.bone > 0) {
-      if (record.bone >= remainingBoneToDeduct) {
-        record.bone -= remainingBoneToDeduct;
-        remainingBoneToDeduct = 0;
-      } else {
-        remainingBoneToDeduct -= record.bone;
-        record.bone = 0;
-      }
-      updated = true;
-    }
-
-    if (remainingBonelessToDeduct > 0 && record.boneless > 0) {
-      if (record.boneless >= remainingBonelessToDeduct) {
-        record.boneless -= remainingBonelessToDeduct;
-        remainingBonelessToDeduct = 0;
-      } else {
-        remainingBonelessToDeduct -= record.boneless;
-        record.boneless = 0;
-      }
-      updated = true;
-    }
-
-    if (updated) {
-      record.totalWeight = (record.bone || 0) + (record.boneless || 0) + (record.mixed || 0);
-      if (record.rate) {
-        record.totalAmount = record.totalWeight * record.rate;
-      }
-      await record.save();
-    }
-  }
+  /* Removed destructive FIFO mutation to fix double subtraction bug. 
+     ShopInventory is now treated as an append-only log of supplies. */
 
   const prep = await Preparation.create({
     shopId:        req.params.shopId,

@@ -17,16 +17,19 @@ export default function Preparation() {
   const [isLoading, setIsLoading] = useState(true);
   const [records, setRecords] = useState<any[]>([]);
   const [invIn, setInvIn] = useState<any[]>([]);
+  const [liveStock, setLiveStock] = useState<any>(null);
 
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      const [prepRes, invRes] = await Promise.all([
+      const [prepRes, invRes, stockRes] = await Promise.all([
         api.get(`/shops/${id}/preparations`),
-        api.get(`/shops/${id}/inventory-in`)
+        api.get(`/shops/${id}/inventory-in`),
+        api.get(`/shops/${id}/stock`)
       ]);
       setRecords(prepRes.data.data || []);
       setInvIn(invRes.data.data || []);
+      setLiveStock(stockRes.data.data || null);
     } catch (err) {
       console.error(err);
     } finally {
@@ -71,13 +74,8 @@ export default function Preparation() {
 
   const todayStr = new Date().toISOString().split("T")[0];
 
-  const totalBoneIn = invIn.reduce((s: any, r: any) => s + (Number(r.bone) || 0), 0);
-  const overallBoneUsed = records.reduce((s: any, r: any) => s + (Number(r.boneUsed) || 0), 0);
-  const availBone = Math.max(0, totalBoneIn - overallBoneUsed);
-
-  const totalBonelessIn = invIn.reduce((s: any, r: any) => s + (Number(r.boneless) || 0), 0);
-  const overallBonelessUsed = records.reduce((s: any, r: any) => s + (Number(r.bonelessUsed) || 0), 0);
-  const availBoneless = Math.max(0, totalBonelessIn - overallBonelessUsed);
+  const availBone = Number(liveStock?.boneStock) || 0;
+  const availBoneless = Number(liveStock?.bonelessStock) || 0;
 
   const b_fry = Number(boneFry) || 0;
   const bl_fry = Number(bonelessFry) || 0;

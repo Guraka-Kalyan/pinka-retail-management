@@ -348,6 +348,30 @@ export default function Dashboard() {
   const [newNoteShopId, setNewNoteShopId] = useState("");
   const [newNoteText, setNewNoteText] = useState("");
   const [savingNote, setSavingNote] = useState(false);
+  const [expandedShops, setExpandedShops] = useState<Set<string>>(new Set());
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
+
+  const toggleShopExpand = (shopId: string) => {
+    setExpandedShops(prev => {
+      const next = new Set(prev);
+      if (next.has(shopId)) next.delete(shopId); else next.add(shopId);
+      return next;
+    });
+  };
+
+  const handleDeleteNote = async (noteId: string) => {
+    if (!window.confirm("Delete this note?")) return;
+    try {
+      setDeletingNoteId(noteId);
+      await api.delete(`/shops/notes/${noteId}`);
+      const notesR = await api.get("/shops/notes/all");
+      setNotes(notesR.data.data || []);
+    } catch (e: any) {
+      alert("Failed to delete note: " + (e?.response?.data?.message || e.message));
+    } finally {
+      setDeletingNoteId(null);
+    }
+  };
 
   const handleAddNote = async () => {
     if (!newNoteShopId || !newNoteText.trim()) return alert("Please select a shop and write a note.");
@@ -658,12 +682,17 @@ export default function Dashboard() {
     return Object.values(batchMap).filter(b => b.inventoryIn > 0 || b.externalAdded > 0 || b.salesValue > 0);
   }, [batches, fInvIn, fSales]);
 
-  // ── Notes grouped ─────────────────────────────────────────────────────────
-  const notesList = useMemo(() => notes.map(n => ({
-    shopName: typeof n.shopId === "object" ? n.shopId.name : "Shop",
-    text: n.text,
-    date: n.date,
-  })), [notes]);
+  // ── Notes grouped by shop ─────────────────────────────────────────────────
+  const notesGrouped = useMemo(() => {
+    const map = new Map<string, { shopId: string; shopName: string; notes: Array<{ _id: string; text: string; date: string }> }>();
+    notes.forEach(n => {
+      const shopId = typeof n.shopId === "object" ? n.shopId._id : n.shopId;
+      const shopName = typeof n.shopId === "object" ? n.shopId.name : "Shop";
+      if (!map.has(shopId)) map.set(shopId, { shopId, shopName, notes: [] });
+      map.get(shopId)!.notes.push({ _id: n._id, text: n.text, date: n.date });
+    });
+    return Array.from(map.values());
+  }, [notes]);
 
   const handleExport = (type: "pdf" | "excel") => {
     const combinedDressingData = batches.map(b => {
@@ -738,17 +767,42 @@ export default function Dashboard() {
             + Add Note
           </Button>
         </div>
-        {notesList.length > 0 ? (
+        {notesGrouped.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-            {notesList.map((n, i) => (
-              <div key={i} className="bg-primary/5 border border-primary/20 rounded-md p-4 shadow-sm">
-                <div className="flex items-center gap-2 mb-2 border-b border-primary/10 pb-2">
-                  <span className="text-xl">📌</span>
-                  <span className="text-[18px] font-bold" style={{ color: C_PRIMARY }}>{n.shopName}</span>
+            {notesGrouped.map(group => {
+              const isExpanded = expandedShops.has(group.shopId);
+              const LIMIT = 3;
+              const visibleNotes = isExpanded ? group.notes : group.notes.slice(0, LIMIT);
+              const hiddenCount = group.notes.length - LIMIT;
+              return (
+                <div key={group.shopId} className="bg-primary/5 border border-primary/20 rounded-md p-4 shadow-sm flex flex-col gap-1">
+                  {/* Header */}
+                  <div className="flex items-center gap-2 mb-2 border-b border-primary/10 pb-2">
+                    <span className="text-lg">📌</span>
+                    <span className="font-black text-sm" style={{ color: C_PRIMARY }}>{group.shopName}</span>
+                  </div>
+                  {/* Note items */}
+                  <ul className="space-y-1.5">
+                    {visibleNotes.map(note => (
+                      <li key={note._id} className="flex items-start gap-2">
+                        <span className="text-primary mt-0.5 shrink-0 text-xs font-black">•</span>
+                        <span className="text-sm text-foreground leading-snug">{note.text}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {/* See more / less toggle */}
+                  {group.notes.length > LIMIT && (
+                    <button
+                      onClick={() => toggleShopExpand(group.shopId)}
+                      className="mt-2 text-xs font-bold text-left transition-colors"
+                      style={{ color: C_PRIMARY }}
+                    >
+                      {isExpanded ? "See less" : `+ See more (${hiddenCount})`}
+                    </button>
+                  )}
                 </div>
-                <p className="text-[16px] text-foreground leading-relaxed">{n.text}</p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="text-sm text-muted-foreground italic mb-4">No shop notes found.</div>

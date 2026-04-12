@@ -67,7 +67,7 @@ export default function InventoryIn() {
   }, [id, isWarehouse]);
   
   // Form State
-  const [entryType, setEntryType] = useState<"central" | "external">("central");
+  const [entryType, setEntryType] = useState<"central" | "external">("external");
   const [vendorName, setVendorName] = useState("");
   const [batch, setBatch] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
@@ -332,12 +332,7 @@ export default function InventoryIn() {
       <div className="rounded-sm border bg-card p-6 shadow-none mb-8">
         <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 border-b pb-2 gap-4">
           <h2 className="text-lg font-semibold">Add Stock Form</h2>
-          {!isWarehouse && (
-            <div className="flex gap-2">
-              <Button size="sm" variant={entryType === "central" ? "default" : "outline"} onClick={() => setEntryType("central")}>Central Dispatch</Button>
-              <Button size="sm" variant={entryType === "external" ? "default" : "outline"} onClick={() => setEntryType("external")}>External Purchase</Button>
-            </div>
-          )}
+
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-4">
           <div className="space-y-1.5 min-w-[200px]">
