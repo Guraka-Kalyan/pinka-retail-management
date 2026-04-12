@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import Breadcrumb from "@/components/Breadcrumb";
 import InventoryIn from "@/pages/InventoryIn";
@@ -8,7 +8,7 @@ import Costs from "@/pages/Costs";
 import { 
   Store, MapPin, Phone, CheckCircle2, TrendingUp, AlertTriangle, Menu, MapPinned, CreditCard, LayoutGrid, Plus, MoreVertical, Edit2,
   Leaf, Package, Users, IndianRupee, DownloadCloud, Calendar as CalendarIcon, ArrowUpRight, ArrowDownRight, Activity, Smartphone, Wallet,
-  Bone, CookingPot
+  Bone, CookingPot, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,7 +28,9 @@ const COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--cha
 
 export default function ShopDashboard() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"overview" | "inventory-in" | "preparation" | "costs">("overview");
+  const [allShops, setAllShops] = useState<any[]>([]);
 
   const [timeframe, setTimeframe] = useState<"Today" | "This Week" | "This Month" | "Custom">("This Week");
 
@@ -62,6 +64,7 @@ export default function ShopDashboard() {
         ]);
         
         const allShops = shopsRes.data.data || [];
+        setAllShops(allShops);
         const shop = allShops.find((s: any) => s._id === id || s.id === id);
         setCurrentShop(shop);
 
@@ -217,6 +220,39 @@ export default function ShopDashboard() {
           </div>
           
           <div className="flex flex-wrap gap-3">
+            {/* Prev / Next shop navigation */}
+            {(() => {
+              const idx = allShops.findIndex((s: any) => s._id === id || s.id === id);
+              const prevShop = idx > 0 ? allShops[idx - 1] : null;
+              const nextShop = idx < allShops.length - 1 ? allShops[idx + 1] : null;
+              return (
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    disabled={!prevShop}
+                    onClick={() => prevShop && navigate(`/shop/${prevShop._id || prevShop.id}`)}
+                    className="rounded-sm h-11 px-3 shadow-none border-[var(--border)] font-semibold text-sm bg-card transition-colors"
+                    style={{ color: 'var(--text-primary)' }}
+                    title={prevShop ? `← ${prevShop.name}` : "No previous shop"}
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <span className="text-xs text-muted-foreground font-semibold px-1 select-none">
+                    {allShops.findIndex((s: any) => s._id === id || s.id === id) + 1} / {allShops.length}
+                  </span>
+                  <Button
+                    variant="outline"
+                    disabled={!nextShop}
+                    onClick={() => nextShop && navigate(`/shop/${nextShop._id || nextShop.id}`)}
+                    className="rounded-sm h-11 px-3 shadow-none border-[var(--border)] font-semibold text-sm bg-card transition-colors"
+                    style={{ color: 'var(--text-primary)' }}
+                    title={nextShop ? `${nextShop.name} →` : "No next shop"}
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              );
+            })()}
             <Link to="/shop">
               <Button variant="outline" className="rounded-sm h-11 px-6 shadow-none border-[var(--border)] font-semibold tracking-wide text-sm bg-card transition-colors" style={{color: 'var(--text-primary)'}}>
                 <LayoutGrid className="w-4 h-4 mr-2" /> Back to Shops

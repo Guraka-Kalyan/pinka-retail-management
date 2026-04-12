@@ -53,4 +53,31 @@ const setCounterCash = async (req, res) => {
   res.status(201).json({ success: true, data: record });
 };
 
-module.exports = { getCounterCash, setCounterCash };
+// @desc   Get full counter cash history for a shop (all records, sorted desc)
+// @route  GET /api/shops/:shopId/counter-cash/history
+const getCounterCashHistory = async (req, res) => {
+  const { limit = 60 } = req.query;
+  const records = await CounterCash.find({ shopId: req.params.shopId })
+    .sort({ date: -1 })
+    .limit(Number(limit));
+
+  // For each record, also pull cash sales from that day
+  const Sale = require('../models/Sale.model');
+  const enriched = await Promise.all(records.map(async (r) => {
+    const sales = await Sale.find({ shopId: req.params.shopId, date: r.date, deletedAt: null });
+    const cashSales = sales.reduce((sum, s) => sum + (s.cash || 0), 0);
+    const phonePeSales = sales.reduce((sum, s) => sum + (s.phonePe || 0), 0);
+    const totalSales = sales.reduce((sum, s) => sum + (s.total || 0), 0);
+    return {
+      ...r.toObject(),
+      cashSales,
+      phonePeSales,
+      totalSales,
+      counterTotal: r.openingCash + cashSales,
+    };
+  }));
+
+  res.json({ success: true, data: enriched });
+};
+
+module.exports = { getCounterCash, setCounterCash, getCounterCashHistory };

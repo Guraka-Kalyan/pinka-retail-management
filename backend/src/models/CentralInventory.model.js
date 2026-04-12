@@ -21,6 +21,9 @@ const centralInventorySchema = new mongoose.Schema({
   },
   totalWeight: { type: Number, default: 0 },
   totalAmount: { type: Number, default: 0 },
+  // ── Snapshot fields — set once at packing time, NEVER modified by supply ops ──
+  packedWeight: { type: Number, default: 0 },
+  packedAmount: { type: Number, default: 0 },
   status: {
     type: String,
     enum: ['Available', 'Empty', 'Partial'],

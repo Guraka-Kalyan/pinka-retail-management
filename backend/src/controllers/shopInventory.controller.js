@@ -7,19 +7,32 @@ const getShopInventory = async (req, res) => {
   res.json({ success: true, data: records });
 };
 
-// @desc   Add manual shop inventory entry
+// @desc   Add manual shop inventory entry (Central or External)
 // @route  POST /api/shops/:shopId/inventory-in
 const createShopInventory = async (req, res) => {
-  const { batch, date, transport, bone, boneless, mixed, skin, meat, rate, totalWeight, totalAmount } = req.body;
-  if (!batch || !date) {
-    return res.status(400).json({ success: false, message: 'batch and date are required' });
+  const { type, vendorName, notes, date, transport, bone, boneless, mixed, skin, meat, rate, totalWeight, totalAmount } = req.body;
+  let { batch } = req.body;
+
+  if (!date) {
+    return res.status(400).json({ success: false, message: 'date is required' });
+  }
+
+  // Auto-generate batch for external requests if not provided
+  if (type === 'external' && !batch) {
+    const timestamp = new Date().getTime().toString().slice(-4);
+    batch = `EXT-BATCH-${timestamp}`;
+  } else if (!batch) {
+    return res.status(400).json({ success: false, message: 'batch is required for central inventory' });
   }
 
   const record = await ShopInventory.create({
     shopId: req.params.shopId,
+    type: type || 'central',
     batch,
     date,
     transport: transport || '',
+    vendorName: vendorName || '',
+    notes: notes || '',
     bone: Number(bone) || 0,
     boneless: Number(boneless) || 0,
     mixed: Number(mixed) || 0,

@@ -68,6 +68,7 @@ export default function InventoryOut({
   customEnd,
   salesModalOpen,
   onSalesModalClose,
+  refreshTrigger = 0,
 }: { 
   shopIdFilter?: string; 
   dateFilter?: string; 
@@ -75,6 +76,7 @@ export default function InventoryOut({
   customEnd?: string;
   salesModalOpen?: boolean;
   onSalesModalClose?: () => void;
+  refreshTrigger?: number;
 }) {
   const params = useParams();
   const id = shopIdFilter || params.id;
@@ -120,7 +122,7 @@ export default function InventoryOut({
 
   useEffect(() => {
     fetchData();
-  }, [id]);
+  }, [id, refreshTrigger]);
 
   const defaultCosts = { fry: 280, curry: 250, bone: 200, boneless: 400, mixed: 200 };
   const [sellingCosts, setSellingCosts] = useState<any>(defaultCosts);

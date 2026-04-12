@@ -3,7 +3,7 @@ import Breadcrumb from "@/components/Breadcrumb";
 import InventoryOut from "@/pages/InventoryOut";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { IndianRupee, Store, Settings2, Wallet, CookingPot, ShoppingCart } from "lucide-react";
+import { IndianRupee, Store, Settings2, Wallet, CookingPot, ShoppingCart, History } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -46,6 +46,7 @@ export default function Sales({ isDailyMode = false }: { isDailyMode?: boolean }
   const defaultCosts = { fry: 280, curry: 250, bone: 200, boneless: 400, mixed: 200 };
   const [sellingCosts, setSellingCosts] = useState<Record<string, number>>(defaultCosts);
   const [isCostsLoading, setIsCostsLoading] = useState(false);
+  const [costsRefresh, setCostsRefresh] = useState(0);
 
   useEffect(() => {
     const fetchSellingCosts = async () => {
@@ -74,6 +75,7 @@ export default function Sales({ isDailyMode = false }: { isDailyMode?: boolean }
       await api.put("/settings/selling-costs", { ...sellingCosts, shopId: selectedShop });
       toast({ title: "Success", description: "Selling costs updated successfully! New prices will apply to Sales." });
       setIsCostsOpen(false);
+      setCostsRefresh(prev => prev + 1);
     } catch (err) {
       console.error(err);
       toast({ title: "Error", description: "Failed to update selling costs", variant: "destructive" });
@@ -89,6 +91,28 @@ export default function Sales({ isDailyMode = false }: { isDailyMode?: boolean }
   const [finalCashVal, setFinalCashVal] = useState(0);
   const [hasOpeningCash, setHasOpeningCash] = useState(false);
   const [todayCashSales, setTodayCashSales] = useState(0);
+
+  // Counter Cash History
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyRecords, setHistoryRecords] = useState<any[]>([]);
+
+  const openHistory = async () => {
+    if (!selectedShop || selectedShop === "global") {
+      toast({ title: "Error", description: "Please select a shop first.", variant: "destructive" });
+      return;
+    }
+    setIsHistoryOpen(true);
+    setHistoryLoading(true);
+    try {
+      const res = await api.get(`/shops/${selectedShop}/counter-cash/history`);
+      setHistoryRecords(res.data.data || []);
+    } catch {
+      toast({ title: "Error", description: "Failed to load history.", variant: "destructive" });
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
 
   const [isPrepOpen, setIsPrepOpen] = useState(false);
   const [prepDate, setPrepDate] = useState(todayStr);
@@ -247,12 +271,63 @@ export default function Sales({ isDailyMode = false }: { isDailyMode?: boolean }
         </div>
 
         {/* Daily Costs Button */}
-        <span title={!selectedShop || selectedShop === "global" ? "Select a shop first" : ""}>
-          <Button disabled={!selectedShop || selectedShop === "global"} onClick={(e) => { e.preventDefault(); setIsCostsOpen(true); }} variant="outline" className="h-[40px] sm:h-11 rounded-sm bg-card border-[var(--border)] shadow-none transition-all hover:text-primary hover:border-primary/30 font-bold w-full sm:w-auto px-3 sm:px-4 text-xs sm:text-sm" style={{color: 'var(--text-primary)'}}>
-            <Settings2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-2" />
-            Daily Costs
-          </Button>
-        </span>
+        <Dialog open={isCostsOpen} onOpenChange={setIsCostsOpen}>
+          <DialogTrigger asChild>
+            <span title={!selectedShop || selectedShop === "global" ? "Select a shop first" : ""}>
+              <Button disabled={!selectedShop || selectedShop === "global"} onClick={(e) => { e.preventDefault(); setIsCostsOpen(true); }} variant="outline" className="h-[40px] sm:h-11 rounded-sm bg-card border-[var(--border)] shadow-none transition-all hover:text-primary hover:border-primary/30 font-bold w-full sm:w-auto px-3 sm:px-4 text-xs sm:text-sm" style={{color: 'var(--text-primary)'}}>
+                <Settings2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-2" />
+                Daily Costs
+              </Button>
+            </span>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Daily Selling Costs</DialogTitle>
+              <p className="text-sm text-muted-foreground mt-1">Configure selling prices per kg for <span className="font-bold text-foreground">{selectedShopName}</span></p>
+            </DialogHeader>
+            <div className="grid grid-cols-2 gap-4 py-4">
+              <div className="space-y-2">
+                <Label>Bone (₹/kg)</Label>
+                <div className="relative">
+                  <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input type="number" className="pl-9 h-11 bg-card border-zinc-200 font-bold" value={sellingCosts.bone || 0} onChange={(e) => setSellingCosts({...sellingCosts, bone: Number(e.target.value)})} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Boneless (₹/kg)</Label>
+                <div className="relative">
+                  <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input type="number" className="pl-9 h-11 bg-card border-zinc-200 font-bold" value={sellingCosts.boneless || 0} onChange={(e) => setSellingCosts({...sellingCosts, boneless: Number(e.target.value)})} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Fry (₹/kg)</Label>
+                <div className="relative">
+                  <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input type="number" className="pl-9 h-11 bg-card border-zinc-200 font-bold" value={sellingCosts.fry || 0} onChange={(e) => setSellingCosts({...sellingCosts, fry: Number(e.target.value)})} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Curry (₹/kg)</Label>
+                <div className="relative">
+                  <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input type="number" className="pl-9 h-11 bg-card border-zinc-200 font-bold" value={sellingCosts.curry || 0} onChange={(e) => setSellingCosts({...sellingCosts, curry: Number(e.target.value)})} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Mixed (₹/kg)</Label>
+                <div className="relative">
+                  <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input type="number" className="pl-9 h-11 bg-card border-zinc-200 font-bold" value={sellingCosts.mixed || 0} onChange={(e) => setSellingCosts({...sellingCosts, mixed: Number(e.target.value)})} />
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsCostsOpen(false)} className="rounded-sm font-bold w-full sm:w-auto">Cancel</Button>
+              <Button onClick={handleSaveCosts} disabled={isCostsLoading} className="bg-primary hover:bg-primary/80 text-white font-bold w-full sm:w-auto shadow-none rounded-sm">Save</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Counter Cash Button */}
         <Dialog open={isCounterCashOpen} onOpenChange={setIsCounterCashOpen}>
@@ -311,6 +386,74 @@ export default function Sales({ isDailyMode = false }: { isDailyMode?: boolean }
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsCounterCashOpen(false)} className="rounded-sm font-bold w-full sm:w-auto">Cancel</Button>
               <Button onClick={handleSaveCounterCash} className="bg-primary hover:bg-primary/80 text-white font-bold w-full sm:w-auto shadow-none rounded-sm">Save</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Counter Cash History Button */}
+        <span title={!selectedShop || selectedShop === "global" ? "Select a shop first" : ""}>
+          <Button
+            disabled={!selectedShop || selectedShop === "global"}
+            onClick={openHistory}
+            variant="outline"
+            className="h-[40px] sm:h-11 rounded-sm bg-card border-[var(--border)] shadow-none transition-all hover:text-primary hover:border-primary/30 font-bold w-full sm:w-auto px-3 sm:px-4 text-xs sm:text-sm"
+            style={{ color: 'var(--text-primary)' }}
+          >
+            <History className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-2" />
+            Cash History
+          </Button>
+        </span>
+
+        {/* History Dialog */}
+        <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+          <DialogContent className="sm:max-w-[420px] max-h-[85vh] overflow-hidden flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <History className="w-5 h-5 text-primary" />
+                Cash History — {selectedShopName}
+              </DialogTitle>
+              <p className="text-sm text-muted-foreground mt-1">Daily opening &amp; final cash log</p>
+            </DialogHeader>
+
+            <div className="overflow-y-auto flex-1 mt-2">
+              {historyLoading ? (
+                <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">Loading history...</div>
+              ) : historyRecords.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                  <Wallet className="w-10 h-10 mb-3 opacity-30" />
+                  <p className="font-semibold">No records found for this shop.</p>
+                </div>
+              ) : (
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b bg-muted/40">
+                      <th className="text-left px-3 py-2 font-bold text-xs uppercase tracking-wider text-muted-foreground">Date</th>
+                      <th className="text-right px-3 py-2 font-bold text-xs uppercase tracking-wider text-muted-foreground">Opening Cash</th>
+                      <th className="text-right px-3 py-2 font-bold text-xs uppercase tracking-wider text-muted-foreground">Final Cash</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyRecords.map((r, i) => (
+                      <tr key={r._id || i} className={`border-b transition-colors hover:bg-muted/30 ${i % 2 === 0 ? '' : 'bg-muted/10'}`}>
+                        <td className="px-3 py-2.5 font-bold text-foreground">{r.date}</td>
+                        <td className="px-3 py-2.5 text-right">₹{(r.openingCash || 0).toLocaleString('en-IN')}</td>
+                        <td className="px-3 py-2.5 text-right font-bold text-primary">₹{(r.finalCash || 0).toLocaleString('en-IN')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="bg-muted/40 border-t-2">
+                    <tr>
+                      <td className="px-3 py-2.5 font-black text-xs uppercase tracking-wider">Total ({historyRecords.length} days)</td>
+                      <td className="px-3 py-2.5 text-right font-bold">₹{historyRecords.reduce((s,r)=>s+(r.openingCash||0),0).toLocaleString('en-IN')}</td>
+                      <td className="px-3 py-2.5 text-right font-bold text-primary">₹{historyRecords.reduce((s,r)=>s+(r.finalCash||0),0).toLocaleString('en-IN')}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
+            </div>
+
+            <DialogFooter className="pt-3 border-t">
+              <Button variant="outline" onClick={() => setIsHistoryOpen(false)} className="rounded-sm font-bold">Close</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -430,6 +573,7 @@ export default function Sales({ isDailyMode = false }: { isDailyMode?: boolean }
                   shopIdFilter={selectedShop}
                   salesModalOpen={isSalesModalOpen}
                   onSalesModalClose={() => setIsSalesModalOpen(false)}
+                  refreshTrigger={costsRefresh}
                 />
               </div>
             </div>

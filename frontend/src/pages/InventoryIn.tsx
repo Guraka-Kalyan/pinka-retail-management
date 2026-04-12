@@ -50,10 +50,10 @@ export default function InventoryIn() {
       if (!isWarehouse) {
         const stockRes = await api.get(`/shops/${id}/stock`);
         setLiveStock(stockRes.data.data);
-      } else {
-        const batchRes = await api.get("/batches");
-        setBatches(batchRes.data.data || []);
       }
+      
+      const batchRes = await api.get("/batches");
+      setBatches(batchRes.data.data || []);
     } catch (err) {
       console.error(err);
       toast({ title: "Error", description: "Failed to fetch inventory data.", variant: "destructive" });
@@ -67,6 +67,8 @@ export default function InventoryIn() {
   }, [id, isWarehouse]);
   
   // Form State
+  const [entryType, setEntryType] = useState<"central" | "external">("central");
+  const [vendorName, setVendorName] = useState("");
   const [batch, setBatch] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [transport, setTransport] = useState("");
@@ -95,10 +97,28 @@ export default function InventoryIn() {
     : (totalBone + totalBoneless + totalMixedStock);
 
   const handleSave = async () => {
-    if (!batch || (!bone && !boneless && !mixed)) {
+    if ((isWarehouse || entryType === 'central') && !batch) {
       toast({ 
         title: "Validation Error", 
-        description: "Please fill Batch Number and at least one weight field.", 
+        description: "Please provide a Batch Number.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    if (!isWarehouse && entryType === 'external' && !vendorName) {
+      toast({ 
+        title: "Validation Error", 
+        description: "Please provide a Vendor Name.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    if (!bone && !boneless && !mixed) {
+      toast({ 
+        title: "Validation Error", 
+        description: "Please fill at least one weight field.", 
         variant: "destructive" 
       });
       return;
@@ -121,7 +141,9 @@ export default function InventoryIn() {
       mixed: { qty: Number(mixed) || 0, pricePerKg: Number(mixedPrice) || 0 },
       date: date
     } : {
+      type: entryType,
       batch,
+      vendorName: entryType === 'external' ? vendorName : '',
       transport,
       bone: Number(bone) || 0,
       boneless: Number(boneless) || 0,
@@ -137,7 +159,7 @@ export default function InventoryIn() {
       await api.post(endpoint, payload);
       
       toast({ title: "Success", description: "Inventory stock entry saved successfully." });
-      setBatch(""); setTransport(""); setBone(""); setBoneless(""); setMixed(""); setRate(""); setTotalWeight("");
+      setBatch(""); setVendorName(""); setTransport(""); setBone(""); setBoneless(""); setMixed(""); setRate(""); setTotalWeight("");
       setBonePrice(""); setBonelessPrice(""); setMixedPrice("");
       setDate(new Date().toISOString().split("T")[0]);
       fetchData();
@@ -174,7 +196,9 @@ export default function InventoryIn() {
 
   const handleEditClick = (record: InventoryRecord) => {
     setEditingIndex(record._id || record.id || null);
+    setEntryType((record as any).type || "central");
     setBatch(record.batch || record.batchNo || "");
+    setVendorName((record as any).vendorName || "");
     setDate(record.date || record.createdAt?.split("T")[0] || "");
     setTransport(record.transport);
     setBone((isWarehouse ? (record.bone as any)?.qty : record.bone)?.toString() || "0");
@@ -192,6 +216,34 @@ export default function InventoryIn() {
 
   const handleUpdate = async () => {
     if (!editingIndex) return;
+    
+    if ((isWarehouse || entryType === 'central') && !batch) {
+      toast({ 
+        title: "Validation Error", 
+        description: "Please provide a Batch Number.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    if (!isWarehouse && entryType === 'external' && !vendorName) {
+      toast({ 
+        title: "Validation Error", 
+        description: "Please provide a Vendor Name.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    if (!bone && !boneless && !mixed) {
+      toast({ 
+        title: "Validation Error", 
+        description: "Please fill at least one weight field.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
     const enteredTotalWeight = isWarehouse ? (Number(totalWeight) || 0) : totalKgCalculated;
     if (isWarehouse && enteredTotalWeight !== totalKgCalculated) {
       toast({ 
@@ -208,7 +260,9 @@ export default function InventoryIn() {
       boneless: { qty: Number(boneless) || 0, pricePerKg: Number(bonelessPrice) || 0 },
       mixed: { qty: Number(mixed) || 0, pricePerKg: Number(mixedPrice) || 0 },
     } : {
+      type: entryType,
       batch,
+      vendorName: entryType === 'external' ? vendorName : '',
       transport,
       bone: Number(bone) || 0,
       boneless: Number(boneless) || 0,
@@ -223,7 +277,7 @@ export default function InventoryIn() {
       await api.put(endpoint, payload);
       toast({ title: "Updated", description: "Entry updated" });
       setEditingIndex(null);
-      setBatch(""); setTransport(""); setBone(""); setBoneless(""); setMixed(""); setRate(""); setTotalWeight("");
+      setBatch(""); setVendorName(""); setTransport(""); setBone(""); setBoneless(""); setMixed(""); setRate(""); setTotalWeight("");
       setBonePrice(""); setBonelessPrice(""); setMixedPrice("");
       setDate(new Date().toISOString().split("T")[0]);
       fetchData();
@@ -234,7 +288,7 @@ export default function InventoryIn() {
 
   const cancelEdit = () => {
     setEditingIndex(null);
-    setBatch(""); setTransport(""); setBone(""); setBoneless(""); setMixed(""); setRate("");
+    setBatch(""); setVendorName(""); setTransport(""); setBone(""); setBoneless(""); setMixed(""); setRate("");
     setBonePrice(""); setBonelessPrice(""); setMixedPrice("");
     setDate(new Date().toISOString().split("T")[0]);
   };
@@ -276,23 +330,33 @@ export default function InventoryIn() {
       </div>
 
       <div className="rounded-sm border bg-card p-6 shadow-none mb-8">
-        <h2 className="text-lg font-semibold mb-4 border-b pb-2">Add Stock Form</h2>
+        <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 border-b pb-2 gap-4">
+          <h2 className="text-lg font-semibold">Add Stock Form</h2>
+          {!isWarehouse && (
+            <div className="flex gap-2">
+              <Button size="sm" variant={entryType === "central" ? "default" : "outline"} onClick={() => setEntryType("central")}>Central Dispatch</Button>
+              <Button size="sm" variant={entryType === "external" ? "default" : "outline"} onClick={() => setEntryType("external")}>External Purchase</Button>
+            </div>
+          )}
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-4">
           <div className="space-y-1.5 min-w-[200px]">
-            <Label htmlFor="batch">Batch Number</Label>
-            {isWarehouse ? (
+            <Label htmlFor="batch">{entryType === 'external' ? "Link to Batch" : "Batch Number"}</Label>
+            {isWarehouse || entryType === 'external' ? (
               <select id="batch" className="flex h-10 w-full rounded-sm border border-input bg-background px-3 py-2 text-sm" value={batch} onChange={(e) => {
                 const b = e.target.value;
                 setBatch(b);
-                const selected = batches.find(x => x.batchNo === b);
-                if (selected && selected.cost && selected.usableMeat && selected.usableMeat !== "-") {
-                  const cpk = Math.round(selected.cost / Number(selected.usableMeat));
-                  setBonePrice(cpk.toString());
-                  setBonelessPrice(cpk.toString());
-                  setMixedPrice(cpk.toString());
+                if (isWarehouse) {
+                  const selected = batches.find(x => x.batchNo === b);
+                  if (selected && selected.cost && selected.usableMeat && selected.usableMeat !== "-") {
+                    const cpk = Math.round(selected.cost / Number(selected.usableMeat));
+                    setBonePrice(cpk.toString());
+                    setBonelessPrice(cpk.toString());
+                    setMixedPrice(cpk.toString());
+                  }
                 }
               }}>
-                <option value="">Select Batch</option>
+                <option value="">{entryType === 'external' ? "Create New Batch (Auto)" : "Select Batch"}</option>
                 {batches.map(b => <option key={b.batchNo} value={b.batchNo}>{b.batchNo}</option>)}
               </select>
             ) : (
@@ -306,6 +370,12 @@ export default function InventoryIn() {
               </div>
             )}
           </div>
+          {!isWarehouse && entryType === "external" && (
+            <div className="space-y-1.5 min-w-[200px]">
+              <Label htmlFor="vendorName">Vendor Name</Label>
+              <Input id="vendorName" value={vendorName} onChange={(e) => setVendorName(e.target.value)} placeholder="e.g. Local Farm" />
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label htmlFor="date">Date</Label>
             <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -383,7 +453,8 @@ export default function InventoryIn() {
           isLoading={isLoading}
           columns={[
             { header: "Date", accessor: (r: InventoryRecord) => r.date || r.createdAt?.split("T")[0] || "" },
-            { header: "Batch", accessor: (r: InventoryRecord) => r.batchNo || r.batch || "-" },
+            ...(!isWarehouse ? [{ header: "Type", accessor: (r: any) => r.type === 'external' ? 'External' : 'Central' }] : []),
+            { header: "Batch / Vendor", accessor: (r: any) => (!isWarehouse && r.type === 'external') ? (`${r.vendorName || 'Vendor'} (${r.batch})`) : (r.batchNo || r.batch || "-") },
             ...(!isWarehouse ? [{ header: "Transport", accessor: (r: InventoryRecord) => r.transport || "" }] : []),
             ...(!isWarehouse ? [
               { header: "Bone (kg)", accessor: (r: InventoryRecord) => `${r.bone || 0}` },

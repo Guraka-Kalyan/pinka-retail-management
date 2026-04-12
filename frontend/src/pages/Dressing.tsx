@@ -315,7 +315,8 @@ export default function Dressing() {
       };
 
       try {
-        await api.put(`/batches/${packagingId}`, packagingData);
+        // Use /packaging endpoint so CentralInventory is also updated
+        await api.put(`/batches/${packagingId}/packaging`, packagingData);
         toast({ title: "Packaging Saved", description: `Packaging data saved for ${packagingBatch}` });
         setPackagingBatch(null);
         setPackagingId(null);
@@ -715,7 +716,26 @@ export default function Dressing() {
               }
             },
             {
-              header: "Status", accessor: (r) => {
+              header: "Packed Meat", accessor: (r: any) => {
+                if (r.status !== "Packed" || !r.pkgItems) return <span className="text-muted-foreground text-xs">-</span>;
+                const bone      = r.pkgItems?.bone     || {};
+                const boneless  = r.pkgItems?.boneless || {};
+                const mixed     = r.pkgItems?.mixed    || {};
+                const totalQty  = (Number(bone.qty) || 0) + (Number(boneless.qty) || 0) + (Number(mixed.qty) || 0);
+                const totalVal  = (Number(bone.qty) || 0)     * (Number(bone.pricePerKg)     || 0)
+                                + (Number(boneless.qty) || 0) * (Number(boneless.pricePerKg) || 0)
+                                + (Number(mixed.qty) || 0)    * (Number(mixed.pricePerKg)    || 0);
+                if (totalQty === 0) return <span className="text-muted-foreground text-xs">-</span>;
+                return (
+                  <div className="text-xs leading-snug">
+                    <div className="font-bold text-[#16A34A]">{totalQty} kg</div>
+                    <div className="text-muted-foreground">₹{totalVal.toLocaleString("en-IN")}</div>
+                  </div>
+                );
+              }
+            },
+            {
+              header: "Status", accessor: (r: any) => {
                 let colorClass = "bg-secondary text-secondary-foreground";
                 if (r.status === "Packed") colorClass = "badge-success";
                 else if (r.status === "Slaughtered") colorClass = "badge-warning";
