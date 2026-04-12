@@ -97,7 +97,7 @@ export default function InventoryIn() {
     : (totalBone + totalBoneless + totalMixedStock);
 
   const handleSave = async () => {
-    if ((isWarehouse || entryType === 'central') && !batch) {
+    if (isWarehouse && !batch) {
       toast({ 
         title: "Validation Error", 
         description: "Please provide a Batch Number.", 
@@ -217,7 +217,7 @@ export default function InventoryIn() {
   const handleUpdate = async () => {
     if (!editingIndex) return;
     
-    if ((isWarehouse || entryType === 'central') && !batch) {
+    if (isWarehouse && !batch) {
       toast({ 
         title: "Validation Error", 
         description: "Please provide a Batch Number.", 
@@ -335,36 +335,31 @@ export default function InventoryIn() {
 
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-4">
-          <div className="space-y-1.5 min-w-[200px]">
-            <Label htmlFor="batch">{entryType === 'external' ? "Link to Batch" : "Batch Number"}</Label>
-            {isWarehouse || entryType === 'external' ? (
+          {isWarehouse && (
+            <div className="space-y-1.5 min-w-[200px]">
+              <Label htmlFor="batch">Batch Number</Label>
               <select id="batch" className="flex h-10 w-full rounded-sm border border-input bg-background px-3 py-2 text-sm" value={batch} onChange={(e) => {
                 const b = e.target.value;
                 setBatch(b);
-                if (isWarehouse) {
-                  const selected = batches.find(x => x.batchNo === b);
-                  if (selected && selected.cost && selected.usableMeat && selected.usableMeat !== "-") {
-                    const cpk = Math.round(selected.cost / Number(selected.usableMeat));
-                    setBonePrice(cpk.toString());
-                    setBonelessPrice(cpk.toString());
-                    setMixedPrice(cpk.toString());
-                  }
+                const selected = batches.find(x => x.batchNo === b);
+                if (selected && selected.cost && selected.usableMeat && selected.usableMeat !== "-") {
+                  const cpk = Math.round(selected.cost / Number(selected.usableMeat));
+                  setBonePrice(cpk.toString());
+                  setBonelessPrice(cpk.toString());
+                  setMixedPrice(cpk.toString());
                 }
               }}>
-                <option value="">{entryType === 'external' ? "Create New Batch (Auto)" : "Select Batch"}</option>
+                <option value="">Select Batch</option>
                 {batches.map(b => <option key={b.batchNo} value={b.batchNo}>{b.batchNo}</option>)}
               </select>
-            ) : (
-              <Input id="batch" value={batch} onChange={(e) => setBatch(e.target.value)} placeholder="e.g. BAT-202" />
-            )}
-            
-            {isWarehouse && batch && batches.find(x => x.batchNo === batch) && (
-              <div className="text-xs text-muted-foreground mt-1 bg-secondary/50 p-1.5 rounded-sm border flex flex-col gap-0.5">
-                <div>Original Mixed Qty: <strong className="text-foreground">{batches.find(x => x.batchNo === batch)?.pkgItems?.mixed?.qty || 0} kg</strong></div>
-                <div>Batch Cost: <strong>₹{Math.round(batches.find(x => x.batchNo === batch)?.cost / Number(batches.find(x => x.batchNo === batch)?.usableMeat || 1))}/kg</strong></div>
-              </div>
-            )}
-          </div>
+              {batch && batches.find(x => x.batchNo === batch) && (
+                <div className="text-xs text-muted-foreground mt-1 bg-secondary/50 p-1.5 rounded-sm border flex flex-col gap-0.5">
+                  <div>Original Mixed Qty: <strong className="text-foreground">{batches.find(x => x.batchNo === batch)?.pkgItems?.mixed?.qty || 0} kg</strong></div>
+                  <div>Batch Cost: <strong>₹{Math.round(batches.find(x => x.batchNo === batch)?.cost / Number(batches.find(x => x.batchNo === batch)?.usableMeat || 1))}/kg</strong></div>
+                </div>
+              )}
+            </div>
+          )}
           {!isWarehouse && entryType === "external" && (
             <div className="space-y-1.5 min-w-[200px]">
               <Label htmlFor="vendorName">Vendor Name</Label>

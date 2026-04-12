@@ -42,6 +42,7 @@ export default function ShopDashboard() {
   const [invIn, setInvIn] = useState<any[]>([]);
   const [preps, setPreps] = useState<any[]>([]);
   const [dailyCosts, setDailyCosts] = useState<any[]>([]);
+  const [liveStock, setLiveStock] = useState<any>(null);
 
   // Export State
   const todayStr = new Date().toISOString().split("T")[0];
@@ -55,12 +56,13 @@ export default function ShopDashboard() {
       if (!id) return;
       try {
         setIsLoading(true);
-        const [shopsRes, salesRes, invInRes, prepsRes, costsRes] = await Promise.all([
+        const [shopsRes, salesRes, invInRes, prepsRes, costsRes, stockRes] = await Promise.all([
           api.get("/shops"),
           api.get(`/shops/${id}/sales`),
           api.get(`/shops/${id}/inventory-in`),
           api.get(`/shops/${id}/preparations`),
-          api.get(`/shops/${id}/daily-costs`)
+          api.get(`/shops/${id}/daily-costs`),
+          api.get(`/shops/${id}/stock`)
         ]);
         
         const allShops = shopsRes.data.data || [];
@@ -72,6 +74,7 @@ export default function ShopDashboard() {
         setInvIn(invInRes.data.data || []);
         setPreps(prepsRes.data.data || []);
         setDailyCosts(costsRes.data.data || []);
+        setLiveStock(stockRes.data.data || null);
 
       } catch (err) {
         console.error("Failed to load shop dashboard data", err);
@@ -129,11 +132,12 @@ export default function ShopDashboard() {
   const overallFrySold = salesData.reduce((s: number, r: any) => s + (Number(r.frySold) || 0), 0);
   const overallCurrySold = salesData.reduce((s: number, r: any) => s + (Number(r.currySold) || 0), 0);
 
-  const availBone = totalBoneIn - overallBoneSold - overallBoneUsed;
-  const availBoneless = totalBonelessIn - overallBonelessSold - overallBonelessUsed;
-  const availMixed = totalMixedIn - overallMixedSold;
-  const availFry = totalFryPrep - overallFrySold;
-  const availCurry = totalCurryPrep - overallCurrySold;
+  // Use centralized live stock from API for accurate values
+  const availBone = liveStock?.boneStock ?? (totalBoneIn - overallBoneSold - overallBoneUsed);
+  const availBoneless = liveStock?.bonelessStock ?? (totalBonelessIn - overallBonelessSold - overallBonelessUsed);
+  const availMixed = liveStock?.mixedStock ?? (totalMixedIn - overallMixedSold);
+  const availFry = liveStock?.fryStock ?? (totalFryPrep - overallFrySold);
+  const availCurry = liveStock?.curryStock ?? (totalCurryPrep - overallCurrySold);
 
   const currentKpi = {
     revenue: `₹${totalSalesVal.toLocaleString("en-IN")}`,
