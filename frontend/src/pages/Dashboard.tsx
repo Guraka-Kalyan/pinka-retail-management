@@ -444,9 +444,9 @@ export default function Dashboard() {
           )
         );
 
-        const allSales  = perShop.flatMap(r => r.sales.map((s: any)  => ({ ...s, shopId: r.shopId })));
-        const allCosts  = perShop.flatMap(r => r.costs.map((c: any)  => ({ ...c, shopId: r.shopId })));
-        const allInvIn  = perShop.flatMap(r => r.invIn.map((i: any)  => ({ ...i, shopId: r.shopId })));
+        const allSales  = perShop.flatMap(r => (r.sales || []).filter((s:any) => s && s._id).map((s: any)  => ({ ...s, shopId: r.shopId })));
+        const allCosts  = perShop.flatMap(r => (r.costs || []).filter((c:any) => c && c._id).map((c: any)  => ({ ...c, shopId: r.shopId })));
+        const allInvIn  = perShop.flatMap(r => (r.invIn || []).filter((i:any) => i && i._id).map((i: any)  => ({ ...i, shopId: r.shopId })));
 
         console.log("[Dashboard] sales  sample:", allSales[0]);
         console.log("[Dashboard] costs  sample:", allCosts[0]);
@@ -493,6 +493,7 @@ export default function Dashboard() {
     // Deduplicate packagings by batchNo
     const pkgMap: Record<string, any> = {};
     fPackagings.forEach(item => {
+      if (!item || !item._id) return;
       const key = item.batchNo || item._id;
       const existingW = Number(pkgMap[key]?.packedWeight || pkgMap[key]?.totalWeight || 0);
       const thisW     = Number(item.packedWeight || item.totalWeight || 0);
@@ -547,6 +548,7 @@ export default function Dashboard() {
     // against duplicate CentralInventory records (one record per batch only)
     const pkgMap: Record<string, any> = {};
     fPackagings.forEach(item => {
+      if (!item || !item._id) return;
       const key = item.batchNo || item._id;
       const existingW = getValue(pkgMap[key]?.packedWeight || pkgMap[key]?.totalWeight);
       const thisW     = getValue(item.packedWeight || item.totalWeight);
@@ -562,6 +564,7 @@ export default function Dashboard() {
     const profit = packedVal > 0 ? packedVal - totalSlaughterValue : 0;
 
     const batchStats = fBatches.map(b => {
+      if (!b || !b._id) return null;
       const bWeight = b.animalWeight || 0;
       const bCost   = getValue(b.cost);
       const aWeight = numWeight(b.usableMeat);
@@ -575,7 +578,7 @@ export default function Dashboard() {
       };
     });
 
-    const lineData = batchStats.filter(d => d.before > 0 || d.after > 0);
+    const lineData = batchStats.filter((d: any) => d && (d.before > 0 || d.after > 0));
 
     // One bar per unique batch — weight and value are the permanent snapshot values
     const barData = uniquePackagings.map(item => ({
@@ -611,9 +614,12 @@ export default function Dashboard() {
 
     // Per-batch bar chart map (Value based)
     const batchMap: Record<string, { name: string; shopValue: number; otherValue: number; shopKg: number; otherKg: number }> = {};
-    batches.forEach(b => { batchMap[b.batchNo] = { name: b.batchNo, shopValue: 0, otherValue: 0, shopKg: 0, otherKg: 0 }; });
+    batches.forEach(b => {
+      if (!b || !b._id || !b.batchNo) return;
+      batchMap[b.batchNo] = { name: b.batchNo, shopValue: 0, otherValue: 0, shopKg: 0, otherKg: 0 }; });
     
     fSupplies.forEach(s => {
+      if (!s || !s._id) return;
       if (!batchMap[s.batch]) batchMap[s.batch] = { name: s.batch, shopValue: 0, otherValue: 0, shopKg: 0, otherKg: 0 };
       
       const w = getWeight(s);
@@ -646,6 +652,7 @@ export default function Dashboard() {
     const shopIds = [...new Set(fInvIn.map(i => i.shopId))];
 
     shopIds.forEach(shopId => {
+      if (!shopId) return;
       const shopName = shops.find(s => s._id === shopId)?.name || 'Shop';
 
       // Sort this shop's inventory oldest-first (FIFO order)
@@ -665,6 +672,7 @@ export default function Dashboard() {
       const fifoAllocations: { key: string; allocatedKg: number }[] = [];
 
       shopInventory.forEach(i => {
+        if (!i || !i._id) return;
         const isExt    = i.type === 'external';
         const barLabel = isExt
           ? `${i.vendorName || 'Vendor'} (${shopName})`
@@ -717,7 +725,7 @@ export default function Dashboard() {
   const notesGrouped = useMemo(() => {
     const map = new Map<string, { shopId: string; shopName: string; notes: Array<{ _id: string; text: string; date: string }> }>();
     notes.forEach(n => {
-      const shopId = typeof n.shopId === "object" ? n.shopId._id : n.shopId;
+      const shopId = (typeof n.shopId === "object" && n.shopId) ? n.shopId._id : n.shopId;
       const shopName = typeof n.shopId === "object" ? n.shopId.name : "Shop";
       if (!map.has(shopId)) map.set(shopId, { shopId, shopName, notes: [] });
       map.get(shopId)!.notes.push({ _id: n._id, text: n.text, date: n.date });
@@ -727,6 +735,7 @@ export default function Dashboard() {
 
   const handleExport = (type: "pdf" | "excel") => {
     const combinedDressingData = batches.map(b => {
+      if (!b || !b._id || !b.batchNo) return null;
       const line = dressing.lineData.find(d => d.name === b.batchNo) || { before: 0, after: 0, beforeCost: 0 } as any;
       const bar = dressing.barData.find(d => d.name === b.batchNo) || { weight: 0, value: 0 };
       const profit = (bar.value > 0) ? bar.value - line.beforeCost : 0;
@@ -739,7 +748,7 @@ export default function Dashboard() {
         packedVal: bar.value || 0, 
         profit 
       };
-    }).filter(b => b.before > 0 || b.packed > 0);
+    }).filter(b => b && (b.before > 0 || b.packed > 0));
 
     const combinedSupplyData = supplyData.barData.map((d: any) => ({
       name: d.name,

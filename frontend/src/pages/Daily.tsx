@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { IndianRupee, Store, Settings2, Wallet, CookingPot, ShoppingCart } from "lucide-react";
@@ -6,85 +7,83 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
-import InventoryOut from "@/pages/InventoryOut";
 
 export default function Daily() {
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [isCostsOpen, setIsCostsOpen] = useState(false);
   const [selectedShop, setSelectedShop] = useState("");
-  const [shopsList, setShopsList] = useState<{id: string, name: string}[]>([]);
   const todayStr = new Date().toISOString().split("T")[0];
 
-  useEffect(() => {
-    const fetchShops = async () => {
-      try {
-        const res = await api.get("/shops");
-        let mapped = res.data.data.map((s: any) => ({ id: s._id, name: s.name }));
+  // ── Queries ──────────────────────────────────────────────────────────────────
+  const { data: shopsList = [] } = useQuery({
+    queryKey: ["shops"],
+    queryFn: async () => {
+      const res = await api.get("/shops");
+      let mapped = res.data.data.map((s: any) => ({ id: s._id, name: s.name }));
 
-        const userStr = localStorage.getItem("pinaka_user");
-        if (userStr) {
-          const user = JSON.parse(userStr);
-          
-          if (user.shopAccess === "specific" && user.assignedShops) {
-            mapped = mapped.filter((s: any) => user.assignedShops.includes(s.id));
-          }
-          
-          setShopsList(mapped);
-
-          if (user.assignedShop && mapped.some((s: any) => s.id === user.assignedShop)) {
-            setSelectedShop(user.assignedShop);
-          } else if (mapped.length > 0) {
-            setSelectedShop(mapped[0].id);
-          }
-        } else {
-          setShopsList(mapped);
+      const userStr = localStorage.getItem("pinaka_user");
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        if (user.shopAccess === "specific" && user.assignedShops) {
+          mapped = mapped.filter((s: any) => user.assignedShops.includes(s.id));
         }
-      } catch {
-        toast({ title: "Error", description: "Failed to load shops.", variant: "destructive" });
+        if (user.assignedShop && mapped.some((s: any) => s.id === user.assignedShop)) {
+          setSelectedShop(user.assignedShop);
+        } else if (mapped.length > 0 && !selectedShop) {
+          setSelectedShop(mapped[0].id);
+        }
       }
-    };
-    fetchShops();
-  }, [toast]);
+      return mapped;
+    },
+  });
 
-  const defaultCosts = { fry: 280, curry: 250, bone: 200, boneless: 400, mixed: 200 };
-  const [sellingCosts, setSellingCosts] = useState<Record<string, number>>(defaultCosts);
+  const { data: sellingCostsConfig } = useQuery({
+    queryKey: ["sellingCosts", selectedShop],
+    queryFn: async () => {
+      const res = await api.get(`/settings/selling-costs?shopId=${selectedShop}`);
+      return res.data.data || { fry: 280, curry: 250, bone: 200, boneless: 400, mixed: 200 };
+    },
+    enabled: !!selectedShop && selectedShop !== "global",
+  });
+
+  const { data: counterCashData } = useQuery({
+    queryKey: ["counterCash", selectedShop, todayStr],
+    queryFn: async () => {
+      const counterRes = await api.get(`/shops/${selectedShop}/counter-cash?date=${todayStr}`);
+      return counterRes.data.data || { openingCash: 0, finalCash: 0 };
+    },
+    enabled: !!selectedShop && selectedShop !== "global",
+  });
+
+  const { data: stockData } = useQuery({
+    queryKey: ["shopStock", selectedShop],
+    queryFn: async () => {
+      const res = await api.get(`/shops/${selectedShop}/stock`);
+      return res.data.data;
+    },
+    enabled: !!selectedShop && selectedShop !== "global",
+  });
+
+  // ── Modals & Local State ──────────────────────────────────────────────────────
+  const [sellingCosts, setSellingCosts] = useState<Record<string, number>>({ fry: 280, curry: 250, bone: 200, boneless: 400, mixed: 200 });
 
   useEffect(() => {
-    const fetchSellingCosts = async () => {
-      if (!selectedShop || selectedShop === "global") return;
-      try {
-        const res = await api.get(`/settings/selling-costs?shopId=${selectedShop}`);
-        if (res.data.data) setSellingCosts(res.data.data);
-      } catch (err) {
-        console.error("Failed to fetch selling costs", err);
-      }
-    };
-    fetchSellingCosts();
-  }, [selectedShop]);
-
-  const handleSaveCosts = async () => {
-    if (!selectedShop || selectedShop === "global") return;
-    try {
-      await api.put("/settings/selling-costs", { ...sellingCosts, shopId: selectedShop });
-      toast({ title: "Success", description: "Selling costs updated successfully!" });
-      setIsCostsOpen(false);
-    } catch {
-      toast({ title: "Error", description: "Failed to update selling costs", variant: "destructive" });
-    }
-  };
+    if (sellingCostsConfig) setSellingCosts(sellingCostsConfig);
+  }, [sellingCostsConfig]);
 
   const [isCounterCashOpen, setIsCounterCashOpen] = useState(false);
   const [counterDate, setCounterDate] = useState(todayStr);
   const [counterCashInput, setCounterCashInput] = useState("");
   const [finalCashInput, setFinalCashInput] = useState("");
-  const [counterCashVal, setCounterCashVal] = useState(0);
-  const [finalCashVal, setFinalCashVal] = useState(0);
 
   const [isPrepOpen, setIsPrepOpen] = useState(false);
   const [prepDate, setPrepDate] = useState(todayStr);
   const [stockError, setStockError] = useState<{item: string, available: number, requested: number, field: string} | null>(null);
-  const [isSalesModalOpen, setIsSalesModalOpen] = useState(false);
+  
   const [boneFry, setBoneFry] = useState("");
   const [bonelessFry, setBonelessFry] = useState("");
   const [fryOutput, setFryOutput] = useState("");
@@ -104,91 +103,83 @@ export default function Daily() {
     }
   }, [boneCurry, bonelessCurry]);
 
-  const fetchDataForShop = async () => {
-    if (!selectedShop || selectedShop === "global") return;
-    try {
-      const counterRes = await api.get(`/shops/${selectedShop}/counter-cash?date=${todayStr}`);
-      if (counterRes.data.data) {
-        setCounterCashVal(counterRes.data.data.openingCash || 0);
-        setFinalCashVal(counterRes.data.data.finalCash || 0);
-      } else {
-        setCounterCashVal(0);
-        setFinalCashVal(0);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  // ── Mutations ────────────────────────────────────────────────────────────────
+  const saveCostsMutation = useMutation({
+    mutationFn: async () => api.put("/settings/selling-costs", { ...sellingCosts, shopId: selectedShop }),
+    onSuccess: () => {
+      toast({ title: "Success", description: "Selling costs updated successfully!" });
+      setIsCostsOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["sellingCosts", selectedShop] });
+    },
+    onError: () => toast({ title: "Error", description: "Failed to update selling costs", variant: "destructive" }),
+  });
 
-  useEffect(() => {
-    fetchDataForShop();
-  }, [selectedShop]);
-
-  const handleSaveCounterCash = async () => {
-    if (!selectedShop || selectedShop === "global") return;
-    try {
-      await api.post(`/shops/${selectedShop}/counter-cash`, {
-        date: counterDate,
-        openingCash: Number(counterCashInput),
-        finalCash: Number(finalCashInput)
-      });
+  const saveCounterCashMutation = useMutation({
+    mutationFn: async () => api.post(`/shops/${selectedShop}/counter-cash`, {
+      date: counterDate,
+      openingCash: Number(counterCashInput),
+      finalCash: Number(finalCashInput)
+    }),
+    onSuccess: () => {
       toast({ title: "Success", description: "Counter Cash saved." });
-      setCounterCashVal(Number(counterCashInput));
-      setFinalCashVal(Number(finalCashInput));
       setIsCounterCashOpen(false);
-    } catch {
-      toast({ title: "Error", description: "Failed to save counter cash.", variant: "destructive" });
-    }
-  };
+      queryClient.invalidateQueries({ queryKey: ["counterCash", selectedShop, todayStr] });
+    },
+    onError: () => toast({ title: "Error", description: "Failed to save counter cash.", variant: "destructive" }),
+  });
 
-  const openCounterCashModal = () => {
-    if (!selectedShop) return;
-    setCounterDate(todayStr);
-    setCounterCashInput(counterCashVal.toString());
-    setFinalCashInput(finalCashVal.toString());
-    setIsCounterCashOpen(true);
-  };
-
-  const handleSavePreparation = async () => {
-    if (!selectedShop || selectedShop === "global") return;
-    try {
-      const stockRes = await api.get(`/shops/${selectedShop}/stock`);
-      const stock = stockRes.data.data;
-      
-      const bFry = Number(boneFry) || 0;
-      const bCurry = Number(boneCurry) || 0;
-      const reqBone = bFry + bCurry;
-      
-      const blFry = Number(bonelessFry) || 0;
-      const blCurry = Number(bonelessCurry) || 0;
-      const reqBoneless = blFry + blCurry;
-
-      if (reqBone > stock.boneStock) {
-        setStockError({ item: "Bone", available: stock.boneStock, requested: reqBone, field: "Bone" });
-        return;
-      }
-      if (reqBoneless > stock.bonelessStock) {
-        setStockError({ item: "Boneless", available: stock.bonelessStock, requested: reqBoneless, field: "Boneless" });
-        return;
-      }
-
-      await api.post(`/shops/${selectedShop}/preparations`, {
-        date: prepDate,
-        boneFry: Number(boneFry) || 0,
-        bonelessFry: Number(bonelessFry) || 0,
-        fryOutput: Number(fryOutput) || 0,
-        boneCurry: Number(boneCurry) || 0,
-        bonelessCurry: Number(bonelessCurry) || 0,
-        curryOutput: Number(curryOutput) || 0,
-      });
+  const savePrepMutation = useMutation({
+    mutationFn: async (payload: any) => api.post(`/shops/${selectedShop}/preparations`, payload),
+    onSuccess: () => {
       toast({ title: "Success", description: "Daily preparation logged successfully." });
       setIsPrepOpen(false);
       setBoneFry(""); setBonelessFry(""); setFryOutput("");
       setBoneCurry(""); setBonelessCurry(""); setCurryOutput("");
-      fetchDataForShop();
-    } catch (err: any) {
+      queryClient.invalidateQueries({ queryKey: ["shopStock", selectedShop] });
+      queryClient.invalidateQueries({ queryKey: ["shopPreparations", selectedShop] });
+    },
+    onError: (err: any) => {
       toast({ title: "Error", description: err.response?.data?.message || "Failed to save preparation.", variant: "destructive" });
+    },
+  });
+
+  // ── Handlers ─────────────────────────────────────────────────────────────────
+  const openCounterCashModal = () => {
+    if (!selectedShop) return;
+    setCounterDate(todayStr);
+    setCounterCashInput(counterCashData?.openingCash?.toString() || "0");
+    setFinalCashInput(counterCashData?.finalCash?.toString() || "0");
+    setIsCounterCashOpen(true);
+  };
+
+  const handleSavePreparation = () => {
+    if (!selectedShop || selectedShop === "global" || !stockData) return;
+    const bFry = Number(boneFry) || 0;
+    const bCurry = Number(boneCurry) || 0;
+    const reqBone = bFry + bCurry;
+    
+    const blFry = Number(bonelessFry) || 0;
+    const blCurry = Number(bonelessCurry) || 0;
+    const reqBoneless = blFry + blCurry;
+
+    if (reqBone > stockData.boneStock) {
+      setStockError({ item: "Bone", available: stockData.boneStock, requested: reqBone, field: "Bone" });
+      return;
     }
+    if (reqBoneless > stockData.bonelessStock) {
+      setStockError({ item: "Boneless", available: stockData.bonelessStock, requested: reqBoneless, field: "Boneless" });
+      return;
+    }
+
+    savePrepMutation.mutate({
+      date: prepDate,
+      boneFry: bFry,
+      bonelessFry: blFry,
+      fryOutput: Number(fryOutput) || 0,
+      boneCurry: bCurry,
+      bonelessCurry: blCurry,
+      curryOutput: Number(curryOutput) || 0,
+    });
   };
 
   const handleSignOut = () => {
@@ -207,7 +198,7 @@ export default function Daily() {
                 <SelectValue placeholder="Select a Shop" />
               </SelectTrigger>
               <SelectContent>
-                {shopsList.map(shop => (
+                {shopsList.map((shop: any) => (
                   <SelectItem key={shop.id} value={shop.id} className="font-bold text-base">{shop.name}</SelectItem>
                 ))}
               </SelectContent>
@@ -243,11 +234,11 @@ export default function Daily() {
 
           <Button 
             disabled={!selectedShop}
-            onClick={() => setIsSalesModalOpen(true)} 
+            onClick={() => navigate('/sales')} 
             className="h-24 rounded-xl bg-[#FF6B00] hover:bg-[#FF6B00]/90 text-white font-black text-2xl shadow-xl transform transition active:scale-95 flex items-center justify-center gap-4 disabled:opacity-60 disabled:active:scale-100 disabled:shadow-none"
           >
             <ShoppingCart className="w-8 h-8" />
-            Sales
+            Sales Dashboard
           </Button>
 
           <Button 
@@ -291,7 +282,7 @@ export default function Daily() {
               </div>
             ))}
             <div className="pt-2">
-              <Button onClick={handleSaveCosts} className="w-full bg-primary hover:bg-primary/80 text-white h-12 shadow-none font-bold tracking-widest uppercase rounded-sm">
+              <Button onClick={() => saveCostsMutation.mutate()} disabled={saveCostsMutation.isPending} className="w-full bg-primary hover:bg-primary/80 text-white h-12 shadow-none font-bold tracking-widest uppercase rounded-sm">
                 Save Costs
               </Button>
             </div>
@@ -328,7 +319,7 @@ export default function Daily() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsCounterCashOpen(false)} className="rounded-sm font-bold w-full sm:w-auto">Cancel</Button>
-            <Button onClick={handleSaveCounterCash} className="bg-primary hover:bg-primary/80 text-white font-bold w-full sm:w-auto shadow-none rounded-sm">Save</Button>
+            <Button onClick={() => saveCounterCashMutation.mutate()} disabled={saveCounterCashMutation.isPending} className="bg-primary hover:bg-primary/80 text-white font-bold w-full sm:w-auto shadow-none rounded-sm">Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -370,25 +361,15 @@ export default function Daily() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsPrepOpen(false)} className="rounded-sm font-bold w-full sm:w-auto">Cancel</Button>
-            <Button onClick={handleSavePreparation} className="text-white font-bold w-full sm:w-auto shadow-none rounded-sm" style={{ backgroundColor: "#FF6B00" }}>Save</Button>
+            <Button onClick={handleSavePreparation} disabled={savePrepMutation.isPending} className="text-white font-bold w-full sm:w-auto shadow-none rounded-sm" style={{ backgroundColor: "#FF6B00" }}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Invisible wrapper purely to mount the Sales Modal */}
-      {selectedShop && (
-        <div className="hidden">
-           <InventoryOut shopIdFilter={selectedShop} salesModalOpen={isSalesModalOpen} onSalesModalClose={() => setIsSalesModalOpen(false)} />
-        </div>
-      )}
-
-      {/* Stock Error Modal */}
       <Dialog open={!!stockError} onOpenChange={(open) => !open && setStockError(null)}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-destructive flex items-center gap-2">
-              ⚠️ Insufficient Stock
-            </DialogTitle>
+            <DialogTitle className="text-xl font-bold text-destructive flex items-center gap-2">⚠️ Insufficient Stock</DialogTitle>
           </DialogHeader>
           <div className="py-2 space-y-4">
             <p className="text-foreground text-base">Not enough <strong className="text-primary">{stockError?.item}</strong> stock available.</p>
@@ -402,15 +383,9 @@ export default function Daily() {
                 <span className="text-destructive font-bold text-lg">{stockError?.requested.toFixed(2)} <span className="text-xs">kg</span></span>
               </div>
             </div>
-            <p className="text-sm text-muted-foreground">Please adjust the quantity to continue.</p>
           </div>
           <DialogFooter className="mt-2">
-            <Button 
-              className="w-full bg-[#FF6B00] hover:bg-[#FF6B00]/90 text-white font-bold h-12 text-lg"
-              onClick={() => setStockError(null)}
-            >
-              Fix Quantity
-            </Button>
+            <Button className="w-full bg-[#FF6B00] hover:bg-[#FF6B00]/90 text-white font-bold h-12 text-lg" onClick={() => setStockError(null)}>Fix Quantity</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
