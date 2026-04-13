@@ -19,9 +19,9 @@ interface InventoryRecord {
   batch: string;
   batchNo?: string;
   transport?: string;
-  bone: number;
-  boneless: number;
-  mixed: number;
+  bone: any;
+  boneless: any;
+  mixed: any;
   rate?: number;
   total_weight?: number;
   totalWeight?: number;

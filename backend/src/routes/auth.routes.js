@@ -1,9 +1,16 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const { login, getMe, changePassword, register, getUsers, deleteUser } = require('../controllers/auth.controller');
 const { protect } = require('../middleware/auth');
 const { validate, loginSchema } = require('../middleware/validate');
 
 const router = express.Router();
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { success: false, message: 'Too many login attempts, please try again after 15 minutes' }
+});
 
 // Admin-only middleware
 const adminOnly = (req, res, next) => {
@@ -13,7 +20,7 @@ const adminOnly = (req, res, next) => {
   next();
 };
 
-router.post('/login', validate(loginSchema), login);
+router.post('/login', loginLimiter, validate(loginSchema), login);
 router.get('/me', protect, getMe);
 router.put('/change-password', protect, changePassword);
 router.post('/register', protect, adminOnly, register);
