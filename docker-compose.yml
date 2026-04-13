@@ -14,7 +14,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=5000
-      - CORS_ORIGIN=https://pinaka.space
+      - CORS_ORIGIN=https://pinaka.space,https://www.pinaka.space
     env_file:
       - ./backend/.env
     networks:
