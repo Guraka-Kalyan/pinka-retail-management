@@ -425,10 +425,6 @@ export default function Dashboard() {
         setBatches(batchesR.data.data || []);
         setPackagings(packagingsR.data.data || []);
 
-        // Log API samples as required
-        console.log("[Dashboard] /api/supplies sample:", (suppliesR.data.data || [])[0]);
-        console.log("[Dashboard] /api/batches  sample:", (batchesR.data.data  || [])[0]);
-
         const perShop = await Promise.all(
           shopList.map(s =>
             Promise.all([
@@ -447,10 +443,6 @@ export default function Dashboard() {
         const allSales  = perShop.flatMap(r => (r.sales || []).filter((s:any) => s && s._id).map((s: any)  => ({ ...s, shopId: r.shopId })));
         const allCosts  = perShop.flatMap(r => (r.costs || []).filter((c:any) => c && c._id).map((c: any)  => ({ ...c, shopId: r.shopId })));
         const allInvIn  = perShop.flatMap(r => (r.invIn || []).filter((i:any) => i && i._id).map((i: any)  => ({ ...i, shopId: r.shopId })));
-
-        console.log("[Dashboard] sales  sample:", allSales[0]);
-        console.log("[Dashboard] costs  sample:", allCosts[0]);
-        console.log("[Dashboard] invIn  sample:", allInvIn[0]);
 
         setSales(allSales);
         setCosts(allCosts);

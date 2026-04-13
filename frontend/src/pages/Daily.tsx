@@ -136,7 +136,6 @@ export default function Daily() {
       setBoneFry(""); setBonelessFry(""); setFryOutput("");
       setBoneCurry(""); setBonelessCurry(""); setCurryOutput("");
       queryClient.invalidateQueries({ queryKey: ["shopStock", selectedShop] });
-      queryClient.invalidateQueries({ queryKey: ["shopPreparations", selectedShop] });
     },
     onError: (err: any) => {
       toast({ title: "Error", description: err.response?.data?.message || "Failed to save preparation.", variant: "destructive" });
