@@ -725,8 +725,10 @@ export default function Dashboard() {
   const notesGrouped = useMemo(() => {
     const map = new Map<string, { shopId: string; shopName: string; notes: Array<{ _id: string; text: string; date: string }> }>();
     notes.forEach(n => {
+      if (!n || !n.shopId) return;
       const shopId = (typeof n.shopId === "object" && n.shopId) ? n.shopId._id : n.shopId;
-      const shopName = typeof n.shopId === "object" ? n.shopId.name : "Shop";
+      const shopName = (typeof n.shopId === "object" && n.shopId) ? n.shopId.name : "Shop";
+      if (!shopId) return;
       if (!map.has(shopId)) map.set(shopId, { shopId, shopName, notes: [] });
       map.get(shopId)!.notes.push({ _id: n._id, text: n.text, date: n.date });
     });
