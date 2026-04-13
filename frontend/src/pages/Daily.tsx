@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import InventoryOut from "@/pages/InventoryOut";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { IndianRupee, Store, Settings2, Wallet, CookingPot, ShoppingCart } from "lucide-react";
@@ -83,6 +84,7 @@ export default function Daily() {
   const [isPrepOpen, setIsPrepOpen] = useState(false);
   const [prepDate, setPrepDate] = useState(todayStr);
   const [stockError, setStockError] = useState<{item: string, available: number, requested: number, field: string} | null>(null);
+  const [isSalesModalOpen, setIsSalesModalOpen] = useState(false);
   
   const [boneFry, setBoneFry] = useState("");
   const [bonelessFry, setBonelessFry] = useState("");
@@ -233,7 +235,7 @@ export default function Daily() {
 
           <Button 
             disabled={!selectedShop}
-            onClick={() => navigate('/sales')} 
+            onClick={() => setIsSalesModalOpen(true)} 
             className="h-24 rounded-xl bg-[#FF6B00] hover:bg-[#FF6B00]/90 text-white font-black text-2xl shadow-xl transform transition active:scale-95 flex items-center justify-center gap-4 disabled:opacity-60 disabled:active:scale-100 disabled:shadow-none"
           >
             <ShoppingCart className="w-8 h-8" />
@@ -388,6 +390,15 @@ export default function Daily() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Sales Modal */}
+      {isSalesModalOpen && selectedShop && selectedShop !== "global" && (
+        <InventoryOut
+          shopIdFilter={selectedShop}
+          salesModalOpen={isSalesModalOpen}
+          onSalesModalClose={() => setIsSalesModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

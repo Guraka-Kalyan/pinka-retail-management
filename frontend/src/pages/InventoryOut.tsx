@@ -546,6 +546,17 @@ export default function InventoryOut({
                      <Input type="number" value={phonePe} onChange={(e) => setPhonePe(e.target.value)} className="h-12 text-2xl font-bold border-2 px-3 text-primary" />
                    </div>
                  </div>
+                 <div className="grid grid-cols-2 gap-2">
+                   <div className="p-3 rounded-sm flex flex-col justify-center items-start shadow-none border-2 border-destructive/30 bg-destructive/5">
+                     <span className="font-extrabold uppercase tracking-wider text-[10px] text-destructive/80 mb-1">Discount</span>
+                     <span className="text-xl font-black text-destructive flex items-center"><IndianRupee className="w-4 h-4 mr-1" />{discountGivenVal.toLocaleString("en-IN")}</span>
+                   </div>
+                   <div className="p-3 rounded-sm border-2 border-success/20 shadow-none flex flex-col justify-center items-start relative overflow-hidden bg-success/5">
+                     <div className="absolute top-0 left-0 w-1 h-full bg-success" />
+                     <span className="font-bold text-success/80 pl-2 uppercase tracking-wider text-[10px] mb-1">Amount Paid</span>
+                     <span className="text-xl font-black text-success flex items-center pl-2"><IndianRupee className="w-4 h-4 mr-1" />{paymentTotal.toLocaleString("en-IN")}</span>
+                   </div>
+                 </div>
               </div>
             </div>
           </div>
