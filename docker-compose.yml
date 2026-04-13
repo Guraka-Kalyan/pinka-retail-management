@@ -25,7 +25,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - VITE_API_URL=https://api.pinaka.space
+        - VITE_API_URL=https://api.pinaka.space/api
     container_name: pinaka_frontend
     restart: always
     # No host port mapping — only accessible internally via Docker network
