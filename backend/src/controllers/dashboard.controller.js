@@ -4,10 +4,12 @@ const DailyCost = require('../models/DailyCost.model');
 const CentralInventory = require('../models/CentralInventory.model');
 const Batch = require('../models/Batch.model');
 const ShopNote = require('../models/ShopNote.model');
-const CounterCash = require('../models/CounterCash.model');
+// CounterCash removed — was fetched but never used in the response
 
 // @desc   Get dashboard summary
 // @route  GET /api/dashboard/summary
+// OPTIMIZED: Replaced 4x .find() + 7x .reduce() calls with 4 concurrent $group aggregations.
+// Also removed unused CounterCash.find() query that was fetched but never included in response.
 const getDashboardSummary = async (req, res) => {
   const today = new Date().toISOString().split('T')[0];
   const thisMonthStart = today.substring(0, 7) + '-01';
@@ -15,58 +17,77 @@ const getDashboardSummary = async (req, res) => {
   const [
     totalShops,
     totalBatches,
-    todaySales,
-    monthSales,
-    monthCosts,
-    centralInventory,
+    todaySalesAgg,
+    monthSalesAgg,
+    monthCostsAgg,
+    centralAgg,
     recentNotes,
-    todayCounterCashes,
   ] = await Promise.all([
     Shop.countDocuments(),
     Batch.countDocuments(),
-    Sale.find({ date: today, deletedAt: null }),
-    Sale.find({ date: { $gte: thisMonthStart, $lte: today }, deletedAt: null }),
-    DailyCost.find({ date: { $gte: thisMonthStart, $lte: today }, deletedAt: null }),
-    CentralInventory.find(),
+    // Aggregate today's revenue/cash/phonePe/bills — no document transfer needed
+    Sale.aggregate([
+      { $match: { date: today, deletedAt: null } },
+      { $group: {
+          _id:     null,
+          revenue: { $sum: '$total' },
+          cash:    { $sum: '$cash' },
+          phonePe: { $sum: '$phonePe' },
+          bills:   { $sum: 1 },
+      }},
+    ]),
+    // Aggregate this month's revenue only
+    Sale.aggregate([
+      { $match: { date: { $gte: thisMonthStart, $lte: today }, deletedAt: null } },
+      { $group: { _id: null, revenue: { $sum: '$total' } } },
+    ]),
+    // Aggregate this month's costs only
+    DailyCost.aggregate([
+      { $match: { date: { $gte: thisMonthStart, $lte: today }, deletedAt: null } },
+      { $group: { _id: null, total: { $sum: '$total' } } },
+    ]),
+    // Aggregate central inventory totals — no full document scan needed
+    CentralInventory.aggregate([
+      { $group: {
+          _id:      null,
+          bone:     { $sum: '$bone.qty' },
+          boneless: { $sum: '$boneless.qty' },
+          mixed:    { $sum: '$mixed.qty' },
+      }},
+    ]),
     ShopNote.find().populate('shopId', 'name').sort({ createdAt: -1 }).limit(5),
-    CounterCash.find({ date: today }),
   ]);
 
-  const todayRevenue = todaySales.reduce((s, r) => s + (r.total || 0), 0);
-  const todayCash = todaySales.reduce((s, r) => s + (r.cash || 0), 0);
-  const todayPhonePe = todaySales.reduce((s, r) => s + (r.phonePe || 0), 0);
-  const monthRevenue = monthSales.reduce((s, r) => s + (r.total || 0), 0);
-  const monthCostTotal = monthCosts.reduce((s, r) => s + (r.total || 0), 0);
-  const netProfit = monthRevenue - monthCostTotal;
+  const today_   = todaySalesAgg[0]  || { revenue: 0, cash: 0, phonePe: 0, bills: 0 };
+  const month_   = monthSalesAgg[0]  || { revenue: 0 };
+  const costs_   = monthCostsAgg[0]  || { total: 0 };
+  const central_ = centralAgg[0]     || { bone: 0, boneless: 0, mixed: 0 };
 
-  const centralBone = centralInventory.reduce((s, r) => s + (r.bone?.qty || 0), 0);
-  const centralBoneless = centralInventory.reduce((s, r) => s + (r.boneless?.qty || 0), 0);
-  const centralMixed = centralInventory.reduce((s, r) => s + (r.mixed?.qty || 0), 0);
-  const centralTotalWeight = centralBone + centralBoneless + centralMixed;
-  const isLowStock = centralTotalWeight < 5;
+  const centralTotalWeight = central_.bone + central_.boneless + central_.mixed;
+  const netProfit = month_.revenue - costs_.total;
 
   res.json({
     success: true,
     data: {
-      shops: totalShops,
+      shops:   totalShops,
       batches: totalBatches,
       today: {
-        revenue: todayRevenue,
-        cash: todayCash,
-        phonePe: todayPhonePe,
-        bills: todaySales.length,
+        revenue: today_.revenue,
+        cash:    today_.cash,
+        phonePe: today_.phonePe,
+        bills:   today_.bills,
       },
       thisMonth: {
-        revenue: monthRevenue,
-        costs: monthCostTotal,
+        revenue: month_.revenue,
+        costs:   costs_.total,
         netProfit,
       },
       centralInventory: {
-        bone: centralBone,
-        boneless: centralBoneless,
-        mixed: centralMixed,
+        bone:        central_.bone,
+        boneless:    central_.boneless,
+        mixed:       central_.mixed,
         totalWeight: centralTotalWeight,
-        isLowStock,
+        isLowStock:  centralTotalWeight < 5,
       },
       recentNotes,
     },

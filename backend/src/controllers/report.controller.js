@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Sale = require('../models/Sale.model');
 const DailyCost = require('../models/DailyCost.model');
 const ShopInventory = require('../models/ShopInventory.model');
@@ -7,88 +8,144 @@ const Shop = require('../models/Shop.model');
 
 // @desc   Sales summary
 // @route  GET /api/reports/sales-summary
+// OPTIMIZED: Single $group aggregation replaces .find() + 9x .reduce() calls in Node.js
 const getSalesSummary = async (req, res) => {
   const { shopId, from, to } = req.query;
-  const query = { deletedAt: null };
-  if (shopId) query.shopId = shopId;
-  if (from && to) query.date = { $gte: from, $lte: to };
+  const match = { deletedAt: null };
+  if (shopId) match.shopId = new mongoose.Types.ObjectId(shopId);
+  if (from && to) match.date = { $gte: from, $lte: to };
 
-  const sales = await Sale.find(query);
+  const [result] = await Sale.aggregate([
+    { $match: match },
+    { $group: {
+        _id:          null,
+        totalRevenue: { $sum: '$total' },
+        totalCash:    { $sum: '$cash' },
+        totalPhonePe: { $sum: '$phonePe' },
+        totalDiscount:{ $sum: '$discountGiven' },
+        boneSold:     { $sum: '$boneSold' },
+        bonelessSold: { $sum: '$bonelessSold' },
+        frySold:      { $sum: '$frySold' },
+        currySold:    { $sum: '$currySold' },
+        mixedSold:    { $sum: '$mixedSold' },
+        totalBills:   { $sum: 1 },
+    }},
+  ]);
 
-  const totalCash = sales.reduce((s, r) => s + (r.cash || 0), 0);
-  const totalPhonePe = sales.reduce((s, r) => s + (r.phonePe || 0), 0);
-  const totalRevenue = sales.reduce((s, r) => s + (r.total || 0), 0);
-  const totalDiscount = sales.reduce((s, r) => s + (r.discountGiven || 0), 0);
-  const boneSold = sales.reduce((s, r) => s + (r.boneSold || 0), 0);
-  const bonelessSold = sales.reduce((s, r) => s + (r.bonelessSold || 0), 0);
-  const frySold = sales.reduce((s, r) => s + (r.frySold || 0), 0);
-  const currySold = sales.reduce((s, r) => s + (r.currySold || 0), 0);
-  const mixedSold = sales.reduce((s, r) => s + (r.mixedSold || 0), 0);
+  const d = result || {
+    totalRevenue: 0, totalCash: 0, totalPhonePe: 0, totalDiscount: 0,
+    boneSold: 0, bonelessSold: 0, frySold: 0, currySold: 0, mixedSold: 0, totalBills: 0,
+  };
 
   res.json({
     success: true,
     data: {
-      totalRevenue,
-      totalCash,
-      totalPhonePe,
-      totalDiscount,
-      totalBills: sales.length,
-      breakdown: { boneSold, bonelessSold, frySold, currySold, mixedSold },
+      totalRevenue:  d.totalRevenue,
+      totalCash:     d.totalCash,
+      totalPhonePe:  d.totalPhonePe,
+      totalDiscount: d.totalDiscount,
+      totalBills:    d.totalBills,
+      breakdown: {
+        boneSold:     d.boneSold,
+        bonelessSold: d.bonelessSold,
+        frySold:      d.frySold,
+        currySold:    d.currySold,
+        mixedSold:    d.mixedSold,
+      },
     },
   });
 };
 
 // @desc   Cost summary
 // @route  GET /api/reports/costs-summary
+// OPTIMIZED: Single $group aggregation replaces .find() + 6x .reduce() calls.
+// Uses $reduce expression to handle nested otherCosts array inside the pipeline.
 const getCostsSummary = async (req, res) => {
   const { shopId, month } = req.query;
-  const query = { deletedAt: null };
-  if (shopId) query.shopId = shopId;
-  if (month) query.date = { $gte: `${month}-01`, $lte: `${month}-31` };
+  const match = { deletedAt: null };
+  if (shopId) match.shopId = new mongoose.Types.ObjectId(shopId);
+  if (month) match.date = { $gte: `${month}-01`, $lte: `${month}-31` };
 
-  const costs = await DailyCost.find(query);
+  const [result] = await DailyCost.aggregate([
+    { $match: match },
+    { $group: {
+        _id:            null,
+        grandTotal:     { $sum: '$total' },
+        totalLabour:    { $sum: '$labour' },
+        totalTransport: { $sum: '$transport' },
+        totalIce:       { $sum: '$ice' },
+        totalMisc:      { $sum: '$misc' },
+        // $reduce handles the nested otherCosts array without a separate $unwind stage
+        totalOther: {
+          $sum: {
+            $reduce: {
+              input: '$otherCosts',
+              initialValue: 0,
+              in: { $add: ['$$value', { $ifNull: ['$$this.amount', 0] }] },
+            },
+          },
+        },
+        records: { $sum: 1 },
+    }},
+  ]);
 
-  const totalLabour = costs.reduce((s, c) => s + (c.labour || 0), 0);
-  const totalTransport = costs.reduce((s, c) => s + (c.transport || 0), 0);
-  const totalIce = costs.reduce((s, c) => s + (c.ice || 0), 0);
-  const totalMisc = costs.reduce((s, c) => s + (c.misc || 0), 0);
-  const totalOther = costs.reduce((s, c) => s + c.otherCosts.reduce((ss, o) => ss + (o.amount || 0), 0), 0);
-  const grandTotal = costs.reduce((s, c) => s + (c.total || 0), 0);
+  const d = result || {
+    grandTotal: 0, totalLabour: 0, totalTransport: 0,
+    totalIce: 0, totalMisc: 0, totalOther: 0, records: 0,
+  };
 
   res.json({
     success: true,
     data: {
-      grandTotal,
-      breakdown: { totalLabour, totalTransport, totalIce, totalMisc, totalOther },
-      records: costs.length,
+      grandTotal: d.grandTotal,
+      breakdown: {
+        totalLabour:    d.totalLabour,
+        totalTransport: d.totalTransport,
+        totalIce:       d.totalIce,
+        totalMisc:      d.totalMisc,
+        totalOther:     d.totalOther,
+      },
+      records: d.records,
     },
   });
 };
 
 // @desc   Inventory summary
 // @route  GET /api/reports/inventory-summary
+// OPTIMIZED: $group aggregation replaces .find() + multiple .reduce() calls.
+// CentralInventory uses nested field paths (bone.qty) directly in $sum.
 const getInventorySummary = async (req, res) => {
   const { shopId } = req.query;
 
   if (shopId) {
-    const records = await ShopInventory.find({ shopId });
-    const bone = records.reduce((s, r) => s + (r.bone || 0), 0);
-    const boneless = records.reduce((s, r) => s + (r.boneless || 0), 0);
-    const mixed = records.reduce((s, r) => s + (r.mixed || 0), 0);
-    const totalValue = records.reduce((s, r) => s + (r.totalAmount || 0), 0);
-    return res.json({ success: true, data: { bone, boneless, mixed, totalValue } });
+    const [result] = await ShopInventory.aggregate([
+      { $match: { shopId: new mongoose.Types.ObjectId(shopId) } },
+      { $group: {
+          _id:        null,
+          bone:       { $sum: '$bone' },
+          boneless:   { $sum: '$boneless' },
+          mixed:      { $sum: '$mixed' },
+          totalValue: { $sum: '$totalAmount' },
+      }},
+    ]);
+    const d = result || { bone: 0, boneless: 0, mixed: 0, totalValue: 0 };
+    return res.json({ success: true, data: { bone: d.bone, boneless: d.boneless, mixed: d.mixed, totalValue: d.totalValue } });
   }
 
-  // Central inventory summary
-  const central = await CentralInventory.find();
-  const bone = central.reduce((s, r) => s + (r.bone?.qty || 0), 0);
-  const boneless = central.reduce((s, r) => s + (r.boneless?.qty || 0), 0);
-  const mixed = central.reduce((s, r) => s + (r.mixed?.qty || 0), 0);
-  const skin = central.reduce((s, r) => s + (r.skin?.qty || 0), 0);
-  const meat = central.reduce((s, r) => s + (r.meat?.qty || 0), 0);
-  const totalValue = central.reduce((s, r) => s + (r.totalAmount || 0), 0);
-
-  res.json({ success: true, data: { bone, boneless, mixed, skin, meat, totalValue } });
+  // Central inventory summary — bone.qty / boneless.qty / mixed.qty are nested fields
+  const [result] = await CentralInventory.aggregate([
+    { $group: {
+        _id:        null,
+        bone:       { $sum: '$bone.qty' },
+        boneless:   { $sum: '$boneless.qty' },
+        mixed:      { $sum: '$mixed.qty' },
+        skin:       { $sum: '$skin.qty' },
+        meat:       { $sum: '$meat.qty' },
+        totalValue: { $sum: '$totalAmount' },
+    }},
+  ]);
+  const d = result || { bone: 0, boneless: 0, mixed: 0, skin: 0, meat: 0, totalValue: 0 };
+  res.json({ success: true, data: { bone: d.bone, boneless: d.boneless, mixed: d.mixed, skin: d.skin, meat: d.meat, totalValue: d.totalValue } });
 };
 
 // @desc   Counter cash summary

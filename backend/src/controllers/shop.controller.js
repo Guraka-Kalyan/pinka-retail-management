@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Shop = require('../models/Shop.model');
 const ShopInventory = require('../models/ShopInventory.model');
 const Preparation = require('../models/Preparation.model');
@@ -18,33 +19,54 @@ const getShop = async (req, res) => {
 };
 
 // Helper for dynamic stock
+// OPTIMIZED: Uses MongoDB $group aggregation — O(1) regardless of data size.
+// Previously loaded all historical records into Node.js and reduced in JS (O(n) growth).
 const getLiveStock = async (shopId) => {
-  const inventory = await ShopInventory.find({ shopId });
-  const preparations = await Preparation.find({ shopId });
-  const sales = await Sale.find({ shopId, deletedAt: null });
+  const id = new mongoose.Types.ObjectId(shopId);
 
-  const totalBoneIn = inventory.reduce((acc, r) => acc + (r.bone || 0), 0);
-  const totalBonelessIn = inventory.reduce((acc, r) => acc + (r.boneless || 0), 0);
-  const totalMixedIn = inventory.reduce((acc, r) => acc + (r.mixed || 0), 0);
+  const [invAgg, prepAgg, saleAgg] = await Promise.all([
+    ShopInventory.aggregate([
+      { $match: { shopId: id } },
+      { $group: {
+          _id: null,
+          bone:     { $sum: '$bone' },
+          boneless: { $sum: '$boneless' },
+          mixed:    { $sum: '$mixed' },
+      }},
+    ]),
+    Preparation.aggregate([
+      { $match: { shopId: id } },
+      { $group: {
+          _id: null,
+          boneUsed:     { $sum: '$boneUsed' },
+          bonelessUsed: { $sum: '$bonelessUsed' },
+          fryOutput:    { $sum: '$fryOutput' },
+          curryOutput:  { $sum: '$curryOutput' },
+      }},
+    ]),
+    Sale.aggregate([
+      { $match: { shopId: id, deletedAt: null } },
+      { $group: {
+          _id: null,
+          boneSold:     { $sum: '$boneSold' },
+          bonelessSold: { $sum: '$bonelessSold' },
+          mixedSold:    { $sum: '$mixedSold' },
+          frySold:      { $sum: '$frySold' },
+          currySold:    { $sum: '$currySold' },
+      }},
+    ]),
+  ]);
 
-  const overallBoneSold = sales.reduce((s, r) => s + (Number(r.boneSold) || 0), 0);
-  const overallBonelessSold = sales.reduce((s, r) => s + (Number(r.bonelessSold) || 0), 0);
-  const overallMixedSold = sales.reduce((s, r) => s + (Number(r.mixedSold) || 0), 0);
-  const overallFrySold = sales.reduce((s, r) => s + (Number(r.frySold) || 0), 0);
-  const overallCurrySold = sales.reduce((s, r) => s + (Number(r.currySold) || 0), 0);
-
-  const overallBoneUsed = preparations.reduce((s, r) => s + (Number(r.boneUsed) || 0), 0);
-  const overallBonelessUsed = preparations.reduce((s, r) => s + (Number(r.bonelessUsed) || 0), 0);
-
-  const totalFryPrep = preparations.reduce((s, r) => s + (Number(r.fryOutput) || 0), 0);
-  const totalCurryPrep = preparations.reduce((s, r) => s + (Number(r.curryOutput) || 0), 0);
+  const inv  = invAgg[0]  || {};
+  const prep = prepAgg[0] || {};
+  const sale = saleAgg[0] || {};
 
   return {
-    boneStock: totalBoneIn - overallBoneSold - overallBoneUsed,
-    bonelessStock: totalBonelessIn - overallBonelessSold - overallBonelessUsed,
-    mixedStock: totalMixedIn - overallMixedSold,
-    fryStock: totalFryPrep - overallFrySold,
-    curryStock: totalCurryPrep - overallCurrySold
+    boneStock:     (inv.bone     || 0) - (sale.boneSold     || 0) - (prep.boneUsed     || 0),
+    bonelessStock: (inv.boneless || 0) - (sale.bonelessSold || 0) - (prep.bonelessUsed || 0),
+    mixedStock:    (inv.mixed    || 0) - (sale.mixedSold    || 0),
+    fryStock:      (prep.fryOutput   || 0) - (sale.frySold   || 0),
+    curryStock:    (prep.curryOutput || 0) - (sale.currySold || 0),
   };
 };
 
