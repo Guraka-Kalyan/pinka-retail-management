@@ -25,6 +25,7 @@ const reportRoutes           = require('./src/routes/report.routes');
 const dashboardRoutes        = require('./src/routes/dashboard.routes');
 
 const app = express();
+app.set('trust proxy', 1); // Required for express-rate-limit behind Nginx proxy
 
 // Connect to MongoDB
 connectDB();
