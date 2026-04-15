@@ -284,21 +284,72 @@ export default function Sales({ isDailyMode = false }: { isDailyMode?: boolean }
           <CookingPot className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-2" /> Preparation
         </Button>
         <Dialog open={isPrepOpen} onOpenChange={setIsPrepOpen}>
-          {/* Prep Modal UI simplified for brevity but functional */}
           <DialogContent className="sm:max-w-[500px]">
-             <DialogHeader><DialogTitle>Preparation</DialogTitle></DialogHeader>
-             <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto">
-               <Input type="date" value={prepDate} onChange={e=>setPrepDate(e.target.value)} className="font-bold border-2 h-10" />
-               <div className="bg-muted/30 p-4 border"><h3 className="font-bold mb-2">Fry</h3>
-                 <div className="flex gap-2 mb-2"><Input type="number" placeholder="Bone" value={boneFry} onChange={e=>setBoneFry(e.target.value)} /><Input type="number" placeholder="Boneless" value={bonelessFry} onChange={e=>setBonelessFry(e.target.value)} /></div>
-                 <Input type="number" placeholder="Output" value={fryOutput} onChange={e=>setFryOutput(e.target.value)} className="bg-primary/5 border-primary/40"/>
-               </div>
-               <div className="bg-muted/30 p-4 border"><h3 className="font-bold mb-2">Curry</h3>
-                 <div className="flex gap-2 mb-2"><Input type="number" placeholder="Bone" value={boneCurry} onChange={e=>setBoneCurry(e.target.value)} /><Input type="number" placeholder="Boneless" value={bonelessCurry} onChange={e=>setBonelessCurry(e.target.value)} /></div>
-                 <Input type="number" placeholder="Output" value={curryOutput} onChange={e=>setCurryOutput(e.target.value)} className="bg-primary/5 border-primary/40"/>
-               </div>
-             </div>
-             <DialogFooter><Button onClick={handleSavePreparation} disabled={savePrepMutation.isPending}>Save</Button></DialogFooter>
+            <DialogHeader>
+              <DialogTitle>Preparation Entry</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-5 py-2 max-h-[75vh] overflow-y-auto">
+              {/* Date */}
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Date</Label>
+                <Input type="date" value={prepDate} onChange={e => setPrepDate(e.target.value)} className="font-bold border-2 h-11 focus-visible:ring-primary focus-visible:border-primary" />
+              </div>
+
+              {/* Fry Preparation */}
+              <div className="bg-muted/30 p-4 rounded-sm border border-border">
+                <h3 className="font-bold text-sm mb-3 flex items-center gap-2 text-primary">
+                  <CookingPot className="w-4 h-4" /> Fry Preparation
+                </h3>
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Bone for Fry (kg)</Label>
+                    <Input type="number" placeholder="0" value={boneFry} onChange={e => setBoneFry(e.target.value)} className="h-10 font-bold border-2" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Boneless for Fry (kg)</Label>
+                    <Input type="number" placeholder="0" value={bonelessFry} onChange={e => setBonelessFry(e.target.value)} className="h-10 font-bold border-2" />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-bold text-primary">Fry Output (kg)</Label>
+                  <Input type="number" placeholder="0" value={fryOutput} onChange={e => setFryOutput(e.target.value)} className="h-10 font-bold border-2 border-primary/40 bg-primary/5" />
+                </div>
+              </div>
+
+              {/* Curry Preparation */}
+              <div className="bg-muted/30 p-4 rounded-sm border border-border">
+                <h3 className="font-bold text-sm mb-3 flex items-center gap-2 text-primary">
+                  <CookingPot className="w-4 h-4" /> Curry Preparation
+                </h3>
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Bone for Curry (kg)</Label>
+                    <Input type="number" placeholder="0" value={boneCurry} onChange={e => setBoneCurry(e.target.value)} className="h-10 font-bold border-2" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Boneless for Curry (kg)</Label>
+                    <Input type="number" placeholder="0" value={bonelessCurry} onChange={e => setBonelessCurry(e.target.value)} className="h-10 font-bold border-2" />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-bold text-primary">Curry Output (kg)</Label>
+                  <Input type="number" placeholder="0" value={curryOutput} onChange={e => setCurryOutput(e.target.value)} className="h-10 font-bold border-2 border-primary/40 bg-primary/5" />
+                </div>
+              </div>
+
+              {/* Stock error */}
+              {stockError && (
+                <div className="p-3 rounded-sm border border-destructive/40 bg-destructive/5 text-sm text-destructive font-semibold">
+                  ⚠️ Not enough <strong>{stockError.item}</strong> stock. Available: {stockError.available} kg, Requested: {stockError.requested} kg
+                </div>
+              )}
+            </div>
+            <DialogFooter className="gap-2 pt-2">
+              <Button variant="outline" className="rounded-sm font-bold" onClick={() => setIsPrepOpen(false)}>Cancel</Button>
+              <Button onClick={handleSavePreparation} disabled={savePrepMutation.isPending} className="bg-primary hover:bg-primary/80 text-white font-bold rounded-sm px-8">
+                {savePrepMutation.isPending ? "Saving..." : "Save"}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
 

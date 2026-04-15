@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import {
   IndianRupee, Wallet, Beef,
-  Trash2, Receipt, X
+  Trash2, Receipt, X, Pencil, AlertTriangle, Loader2
 } from "lucide-react";
 import { useParams } from "react-router-dom";
 import {
@@ -123,12 +123,10 @@ export default function InventoryOut({
   const [salesDate, setSalesDate] = useState(todayStr);
 
   const [selectedBill, setSelectedBill] = useState<OutRecord | null>(null);
-
-  // Export State
-  const [exportFormat, setExportFormat] = useState<"CSV" | "PDF">("CSV");
-  const [exportRange, setExportRange] = useState<"Daily" | "Weekly" | "Monthly" | "Custom">("Daily");
-  const [exportStart, setExportStart] = useState(todayStr);
-  const [exportEnd, setExportEnd] = useState(todayStr);
+  // ── Inline Edit State ─────────────────────────────────────────────────────────
+  // editingRecord ≠ null means the form is in "update" mode (PUT instead of POST)
+  const [editingRecord, setEditingRecord] = useState<OutRecord | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   // ── Calculations (Memoized) ──────────────────────────────────────────────────
   const {
@@ -160,29 +158,32 @@ export default function InventoryOut({
     }
 
     // 2. Form Totals
+    // Fry & Curry: user enters grams, price configured as ₹/kg → divide by 1000
     const boneTotalAmt = (Number(boneSold) || 0) * sellingCosts.bone;
     const bonelessTotalAmt = (Number(bonelessSold) || 0) * sellingCosts.boneless;
-    const fryTotalAmt = (Number(frySold) || 0) * sellingCosts.fry;
-    const curryTotalAmt = (Number(currySold) || 0) * sellingCosts.curry;
+    const fryTotalAmt = ((Number(frySold) || 0) / 1000) * sellingCosts.fry;
+    const curryTotalAmt = ((Number(currySold) || 0) / 1000) * sellingCosts.curry;
     const mixedTotalAmt = (Number(mixedSold) || 0) * sellingCosts.mixed;
     const grandTotalAmt = boneTotalAmt + bonelessTotalAmt + fryTotalAmt + curryTotalAmt + mixedTotalAmt;
     const paymentTotal = (Number(cash) || 0) + (Number(phonePe) || 0);
     const discountGivenVal = Math.max(0, grandTotalAmt - paymentTotal);
 
-    // 3. Overall Stock KPIs
+    // 3. Overall Stock KPIs — fry/curry stock is in kg, show in grams
     const availBone = liveStock?.boneStock || 0;
     const availBoneless = liveStock?.bonelessStock || 0;
     const availMixed = liveStock?.mixedStock || 0;
-    const availFry = liveStock?.fryStock || 0;
-    const availCurry = liveStock?.curryStock || 0;
-    const totalStock = availBone + availBoneless + availMixed + availFry + availCurry;
+    const availFryKg = liveStock?.fryStock || 0;
+    const availCurryKg = liveStock?.curryStock || 0;
+    const availFry = availFryKg * 1000;   // display in grams
+    const availCurry = availCurryKg * 1000; // display in grams
+    const totalStock = availBone + availBoneless + availMixed + availFryKg + availCurryKg;
 
-    // 4. Sold KPIs
+    // 4. Sold KPIs — frySold/currySold stored as kg in DB, display as grams
     const totalBoneSold = filtered.reduce((s: number, r: any) => s + (Number(r.boneSold) || 0), 0);
     const totalBonelessSold = filtered.reduce((s: number, r: any) => s + (Number(r.bonelessSold) || 0), 0);
     const totalMixedSold = filtered.reduce((s: number, r: any) => s + (Number(r.mixedSold) || 0), 0);
-    const totalFrySold = filtered.reduce((s: number, r: any) => s + (Number(r.frySold) || 0), 0);
-    const totalCurrySold = filtered.reduce((s: number, r: any) => s + (Number(r.currySold) || 0), 0);
+    const totalFrySold = filtered.reduce((s: number, r: any) => s + (Number(r.frySold) || 0), 0) * 1000;
+    const totalCurrySold = filtered.reduce((s: number, r: any) => s + (Number(r.currySold) || 0), 0) * 1000;
     const totalCash = filtered.reduce((s: number, r: any) => s + (Number(r.cash) || 0), 0);
     const totalPhonePe = filtered.reduce((s: number, r: any) => s + (Number(r.phonePe) || 0), 0);
     const discountedAmount = filtered.reduce((s: number, r: any) => s + (Number(r.discountGiven) || 0), 0);
@@ -239,27 +240,28 @@ export default function InventoryOut({
       return;
     }
 
-    // Since we maintain stock state locally via useQuery, we check it before saving to fail early instead of waiting for API rejection
+    // Stock check: fry/curry entered in grams, liveStock is in kg — convert grams→kg for comparison
     if (liveStock) {
       const reqBone = Number(boneSold) || 0;
       const reqBoneless = Number(bonelessSold) || 0;
-      const reqFry = Number(frySold) || 0;
-      const reqCurry = Number(currySold) || 0;
+      const reqFryKg = (Number(frySold) || 0) / 1000;
+      const reqCurryKg = (Number(currySold) || 0) / 1000;
       const reqMixed = Number(mixedSold) || 0;
 
       if (reqBone > liveStock.boneStock) return setStockError({ item: "Bone", available: liveStock.boneStock, requested: reqBone, field: "Bone" });
       if (reqBoneless > liveStock.bonelessStock) return setStockError({ item: "Boneless", available: liveStock.bonelessStock, requested: reqBoneless, field: "Boneless" });
       if (reqMixed > liveStock.mixedStock) return setStockError({ item: "Mixed", available: liveStock.mixedStock, requested: reqMixed, field: "Mixed" });
-      if (reqFry > liveStock.fryStock) return setStockError({ item: "Fry", available: liveStock.fryStock, requested: reqFry, field: "Fry" });
-      if (reqCurry > liveStock.curryStock) return setStockError({ item: "Curry", available: liveStock.curryStock, requested: reqCurry, field: "Curry" });
+      if (reqFryKg > liveStock.fryStock) return setStockError({ item: "Fry", available: liveStock.fryStock * 1000, requested: Number(frySold) || 0, field: "Fry" });
+      if (reqCurryKg > liveStock.curryStock) return setStockError({ item: "Curry", available: liveStock.curryStock * 1000, requested: Number(currySold) || 0, field: "Curry" });
     }
 
+    // Payload: fry/curry saved as kg in backend (grams ÷ 1000)
     const payload = {
       date: salesDate,
       boneSold: Number(boneSold) || 0,
       bonelessSold: Number(bonelessSold) || 0,
-      frySold: Number(frySold) || 0,
-      currySold: Number(currySold) || 0,
+      frySold: (Number(frySold) || 0) / 1000,
+      currySold: (Number(currySold) || 0) / 1000,
       mixedSold: Number(mixedSold) || 0,
       cash: Number(cash) || 0,
       phonePe: Number(phonePe) || 0,
@@ -267,6 +269,22 @@ export default function InventoryOut({
       discountGiven: discountGivenVal,
     };
 
+    if (editingRecord) {
+      // ── UPDATE mode (PUT) ───────────────────────────────────────────────
+      try {
+        await api.put(`/shops/${id}/sales/${editingRecord._id || editingRecord.id}`, payload);
+        toast({ title: "Updated", description: `${editingRecord.billId} updated successfully.` });
+        setEditingRecord(null);
+        setBoneSold(""); setBonelessSold(""); setFrySold(""); setCurrySold(""); setMixedSold("");
+        setCash(""); setPhonePe("");
+        queryClient.invalidateQueries({ queryKey: ["inventoryOutData", id] });
+        if (onSalesModalClose) onSalesModalClose();
+      } catch (err: any) {
+        toast({ title: "Error", description: err.response?.data?.message || "Failed to update.", variant: "destructive" });
+      }
+      return;
+    }
+    // ── CREATE mode (POST) ───────────────────────────────────────────────
     saveSalesMutation.mutate(payload);
   };
 
@@ -342,8 +360,8 @@ export default function InventoryOut({
                 <StatCard title="Bone Avail" value={`${stockKpis.availBone} kg`} icon={null} />
                 <StatCard title="Boneless Avail." value={`${stockKpis.availBoneless} kg`} icon={null} />
                 <StatCard title="Mixed Avail." value={`${stockKpis.availMixed} kg`} icon={null} />
-                <StatCard title="Fry Prep." value={`${stockKpis.availFry} kg`} icon={null} />
-                <StatCard title="Curry Prep." value={`${stockKpis.availCurry} kg`} icon={null} />
+                <StatCard title="Fry Prep." value={`${stockKpis.availFry} g`} icon={null} />
+                <StatCard title="Curry Prep." value={`${stockKpis.availCurry} g`} icon={null} />
               </>
             )}
           </div>
@@ -356,12 +374,12 @@ export default function InventoryOut({
               [1,2,3,4,5,6].map(i => <StatCardSkeleton key={i} />)
             ) : (
               <>
-                <StatCard title="Overall Total Sold" className="bg-card border-dashed" value={`${soldKpis.totalBoneSold + soldKpis.totalBonelessSold + soldKpis.totalMixedSold + soldKpis.totalFrySold + soldKpis.totalCurrySold} kg`} icon={null} />
+                <StatCard title="Overall Total Sold" className="bg-card border-dashed" value={`${soldKpis.totalBoneSold + soldKpis.totalBonelessSold + soldKpis.totalMixedSold} kg`} icon={null} />
                 <StatCard title="Bone Sold" value={`${soldKpis.totalBoneSold} kg`} icon={null} />
                 <StatCard title="Boneless Sold" value={`${soldKpis.totalBonelessSold} kg`} icon={null} />
                 <StatCard title="Mixed Sold" value={`${soldKpis.totalMixedSold} kg`} icon={null} />
-                <StatCard title="Fry Sold" value={`${soldKpis.totalFrySold} kg`} icon={null} />
-                <StatCard title="Curry Sold" value={`${soldKpis.totalCurrySold} kg`} icon={null} />
+                <StatCard title="Fry Sold" value={`${soldKpis.totalFrySold} g`} icon={null} />
+                <StatCard title="Curry Sold" value={`${soldKpis.totalCurrySold} g`} icon={null} />
               </>
             )}
           </div>
@@ -409,15 +427,15 @@ export default function InventoryOut({
               </h3>
               <div className="space-y-5">
                 {[
-                  { label: "Bone", val: boneSold, setter: setBoneSold, price: sellingCosts.bone, total: boneTotalAmt },
-                  { label: "Boneless", val: bonelessSold, setter: setBonelessSold, price: sellingCosts.boneless, total: bonelessTotalAmt },
-                  { label: "Fry", val: frySold, setter: setFrySold, price: sellingCosts.fry, total: fryTotalAmt },
-                  { label: "Curry", val: currySold, setter: setCurrySold, price: sellingCosts.curry, total: curryTotalAmt },
-                  { label: "Mixed", val: mixedSold, setter: setMixedSold, price: sellingCosts.mixed, total: mixedTotalAmt },
+                  { label: "Bone", val: boneSold, setter: setBoneSold, price: sellingCosts.bone, total: boneTotalAmt, unit: "kg" },
+                  { label: "Boneless", val: bonelessSold, setter: setBonelessSold, price: sellingCosts.boneless, total: bonelessTotalAmt, unit: "kg" },
+                  { label: "Fry", val: frySold, setter: setFrySold, price: sellingCosts.fry, total: fryTotalAmt, unit: "g" },
+                  { label: "Curry", val: currySold, setter: setCurrySold, price: sellingCosts.curry, total: curryTotalAmt, unit: "g" },
+                  { label: "Mixed", val: mixedSold, setter: setMixedSold, price: sellingCosts.mixed, total: mixedTotalAmt, unit: "kg" },
                 ].map((item) => (
                   <div key={item.label} className="grid grid-cols-2 lg:grid-cols-3 gap-2 lg:gap-6 p-3 lg:p-4 rounded-sm border border-border" style={{ backgroundColor: 'var(--table-row-2)' }}>
                     <div className="space-y-1 lg:space-y-2">
-                       <Label className="text-xs lg:text-lg font-semibold text-muted-foreground">{item.label} Sold</Label>
+                       <Label className="text-xs lg:text-lg font-semibold text-muted-foreground">{item.label} Sold ({item.unit})</Label>
                        <Input
                          ref={itemRefs[item.label] as any}
                          type="number"
@@ -485,13 +503,31 @@ export default function InventoryOut({
       </div>
 
       {/* Sales Modal Modal ... */}
-      <Dialog open={!!salesModalOpen} onOpenChange={(open) => !open && onSalesModalClose && onSalesModalClose()}>
+      <Dialog
+        open={!!salesModalOpen || !!editingRecord}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingRecord(null);
+            setBoneSold(""); setBonelessSold(""); setFrySold(""); setCurrySold(""); setMixedSold("");
+            setCash(""); setPhonePe("");
+            if (onSalesModalClose) onSalesModalClose();
+          }
+        }}
+      >
         <DialogContent className="w-[97vw] max-w-2xl max-h-[92vh] overflow-y-auto p-0 [&>button]:hidden">
           <DialogHeader className="px-5 pt-5 pb-3 border-b sticky top-0 bg-card z-10 flex flex-row items-center justify-between">
             <DialogTitle className="text-lg font-black uppercase tracking-tight flex items-center gap-2">
-              <span className="w-1 h-5 bg-primary rounded-full inline-block" /> Daily Entry Form
+              <span className="w-1 h-5 bg-primary rounded-full inline-block" />
+              {editingRecord ? (
+                <span className="flex items-center gap-2">
+                  Daily Entry Form
+                  <span className="text-xs font-bold bg-primary/10 text-primary border border-primary/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <Pencil className="h-3 w-3" /> Editing {editingRecord.billId}
+                  </span>
+                </span>
+              ) : "Daily Entry Form"}
             </DialogTitle>
-            <button onClick={() => onSalesModalClose && onSalesModalClose()} className="h-8 w-8 flex items-center justify-center rounded-sm hover:bg-muted text-muted-foreground hover:text-foreground">
+            <button onClick={() => { setEditingRecord(null); setBoneSold(""); setBonelessSold(""); setFrySold(""); setCurrySold(""); setMixedSold(""); setCash(""); setPhonePe(""); if (onSalesModalClose) onSalesModalClose(); }} className="h-8 w-8 flex items-center justify-center rounded-sm hover:bg-muted text-muted-foreground hover:text-foreground">
               <X className="h-4 w-4" />
             </button>
           </DialogHeader>
@@ -505,15 +541,15 @@ export default function InventoryOut({
               <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2 border-b pb-2 mb-3"><Beef className="h-4 w-4" /> Section B — Sales</h3>
               <div className="space-y-2">
                 {[
-                  { label: "Bone", val: boneSold, setter: setBoneSold, price: sellingCosts.bone, total: boneTotalAmt },
-                  { label: "Boneless", val: bonelessSold, setter: setBonelessSold, price: sellingCosts.boneless, total: bonelessTotalAmt },
-                  { label: "Fry", val: frySold, setter: setFrySold, price: sellingCosts.fry, total: fryTotalAmt },
-                  { label: "Curry", val: currySold, setter: setCurrySold, price: sellingCosts.curry, total: curryTotalAmt },
-                  { label: "Mixed", val: mixedSold, setter: setMixedSold, price: sellingCosts.mixed, total: mixedTotalAmt },
+                  { label: "Bone", val: boneSold, setter: setBoneSold, price: sellingCosts.bone, total: boneTotalAmt, unit: "kg" },
+                  { label: "Boneless", val: bonelessSold, setter: setBonelessSold, price: sellingCosts.boneless, total: bonelessTotalAmt, unit: "kg" },
+                  { label: "Fry", val: frySold, setter: setFrySold, price: sellingCosts.fry, total: fryTotalAmt, unit: "g" },
+                  { label: "Curry", val: currySold, setter: setCurrySold, price: sellingCosts.curry, total: curryTotalAmt, unit: "g" },
+                  { label: "Mixed", val: mixedSold, setter: setMixedSold, price: sellingCosts.mixed, total: mixedTotalAmt, unit: "kg" },
                 ].map((item) => (
                   <div key={item.label} className="grid grid-cols-3 gap-2 p-3 rounded-sm border border-border bg-[var(--table-row-2)]">
                     <div className="space-y-1">
-                      <Label className="text-[10px] font-semibold uppercase">{item.label} Sold (kg)</Label>
+                      <Label className="text-[10px] font-semibold uppercase">{item.label} Sold ({(item as any).unit})</Label>
                       <Input ref={itemRefs[item.label] as any} type="number" value={item.val} onChange={(e) => item.setter(e.target.value)} className="h-11 text-lg font-bold border-2 px-3" />
                     </div>
                     <div className="space-y-1">
@@ -562,8 +598,16 @@ export default function InventoryOut({
           </div>
           <div className="px-5 pb-5 sticky bottom-0 bg-card pt-3 border-t">
              <Button onClick={handleSaveSales} disabled={saveSalesMutation.isPending} className="w-full h-12 text-base bg-primary hover:bg-primary/80 font-bold text-white shadow-none">
-               {saveSalesMutation.isPending ? "Saving..." : "Save Sales Entry"}
+               {saveSalesMutation.isPending
+                 ? (editingRecord ? "Updating..." : "Saving...")
+                 : (editingRecord ? "Update Entry" : "Save Sales Entry")}
              </Button>
+             {editingRecord && (
+               <button className="w-full text-xs text-muted-foreground mt-1 hover:text-destructive font-semibold"
+                 onClick={() => { setEditingRecord(null); setBoneSold(""); setBonelessSold(""); setFrySold(""); setCurrySold(""); setMixedSold(""); setCash(""); setPhonePe(""); }}>
+                 ✕ Cancel Edit
+               </button>
+             )}
            </div>
         </DialogContent>
       </Dialog>
@@ -585,8 +629,8 @@ export default function InventoryOut({
                  { header: "Date", accessor: "date" },
                  { header: "Bone (kg)", accessor: (r: OutRecord) => `${r.boneSold}` },
                  { header: "Boneless (kg)", accessor: (r: OutRecord) => `${r.bonelessSold}` },
-                 { header: "Fry Sale (kg)", accessor: (r: OutRecord) => `${r.frySold || 0}` },
-                 { header: "Curry Sale (kg)", accessor: (r: OutRecord) => `${r.currySold || 0}` },
+                 { header: "Fry Sale (g)", accessor: (r: OutRecord) => `${Math.round((Number(r.frySold) || 0) * 1000)} g` },
+                 { header: "Curry Sale (g)", accessor: (r: OutRecord) => `${Math.round((Number(r.currySold) || 0) * 1000)} g` },
                  { header: "Mixed Sale (kg)", accessor: (r: OutRecord) => `${r.mixedSold || 0}` },
                  { header: "Total (₹)", accessor: (r: OutRecord) => `₹${r.total.toLocaleString("en-IN")}` },
                  { header: "Discount (₹)", accessor: (r: OutRecord) => `₹${(r.discountGiven || 0).toLocaleString("en-IN")}` },
@@ -604,9 +648,30 @@ export default function InventoryOut({
                  {
                    header: "Actions",
                    accessor: (r: OutRecord) => (
-                     <div className="flex gap-1">
-                       <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteSalesMutation.mutate(r._id || r.id || "")} disabled={deleteSalesMutation.isPending}><Trash2 className="h-3.5 w-3.5" /></Button>
-                     </div>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10"
+                          title="Edit"
+                          onClick={() => {
+                            // Pre-fill form with existing sale values
+                            setBoneSold(String(r.boneSold ?? ""));
+                            setBonelessSold(String(r.bonelessSold ?? ""));
+                            setFrySold(String(Math.round((Number(r.frySold) || 0) * 1000)));
+                            setCurrySold(String(Math.round((Number(r.currySold) || 0) * 1000)));
+                            setMixedSold(String(r.mixedSold ?? ""));
+                            setCash(String(r.cash ?? ""));
+                            setPhonePe(String(r.phonePe ?? ""));
+                            setSalesDate(r.date || todayStr);
+                            // Open the form in edit mode
+                            setEditingRecord(r);
+                          }}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                          onClick={() => setDeleteTarget(r._id || r.id || "")}
+                          disabled={deleteSalesMutation.isPending}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                    )
                  },
                ]}
@@ -617,7 +682,93 @@ export default function InventoryOut({
          </div>
       </div>
 
-      {/* Bill Preview Modal skipped implementation for brevity as original was just UI */}
+      {/* ── Bill Preview Modal ────────────────────────────────────────────── */}
+      <Dialog open={!!selectedBill} onOpenChange={(open) => !open && setSelectedBill(null)}>
+        <DialogContent className="sm:max-w-[460px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-primary" /> Receipt — {selectedBill?.billId}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedBill && (
+            <div className="space-y-4 py-1">
+              {/* Header info */}
+              <div className="flex justify-between text-sm text-muted-foreground border-b pb-3">
+                <span className="font-semibold">{shopName}</span>
+                <span>{selectedBill.date}</span>
+              </div>
+              {/* Items */}
+              <div className="space-y-2">
+                {[
+                  { label: "Bone", qty: `${selectedBill.boneSold} kg`, show: Number(selectedBill.boneSold) > 0 },
+                  { label: "Boneless", qty: `${selectedBill.bonelessSold} kg`, show: Number(selectedBill.bonelessSold) > 0 },
+                  { label: "Fry", qty: `${Math.round((Number(selectedBill.frySold) || 0) * 1000)} g`, show: Number(selectedBill.frySold) > 0 },
+                  { label: "Curry", qty: `${Math.round((Number(selectedBill.currySold) || 0) * 1000)} g`, show: Number(selectedBill.currySold) > 0 },
+                  { label: "Mixed", qty: `${selectedBill.mixedSold} kg`, show: Number(selectedBill.mixedSold) > 0 },
+                ].filter(i => i.show).map(item => (
+                  <div key={item.label} className="flex justify-between items-center text-sm py-1 border-b border-dashed last:border-0">
+                    <span className="font-semibold text-foreground">{item.label}</span>
+                    <span className="text-muted-foreground">{item.qty}</span>
+                  </div>
+                ))}
+              </div>
+              {/* Totals */}
+              <div className="bg-muted/30 rounded-sm border p-3 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="font-bold">₹{selectedBill.total.toLocaleString("en-IN")}</span>
+                </div>
+                {Number(selectedBill.discountGiven) > 0 && (
+                  <div className="flex justify-between text-sm text-green-600">
+                    <span>Discount</span>
+                    <span className="font-bold">-₹{Number(selectedBill.discountGiven).toLocaleString("en-IN")}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm border-t pt-2">
+                  <span className="text-muted-foreground">Cash</span>
+                  <span className="font-semibold">₹{Number(selectedBill.cash).toLocaleString("en-IN")}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">PhonePe</span>
+                  <span className="font-semibold">₹{Number(selectedBill.phonePe).toLocaleString("en-IN")}</span>
+                </div>
+                <div className="flex justify-between font-black text-base border-t pt-2">
+                  <span>Amount Paid</span>
+                  <span className="text-primary">₹{(Number(selectedBill.cash) + Number(selectedBill.phonePe)).toLocaleString("en-IN")}</span>
+                </div>
+              </div>
+              <p className="text-center text-xs text-muted-foreground">Thank you for your purchase!</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button className="w-full bg-primary text-white font-bold rounded-sm" onClick={() => setSelectedBill(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
+      {/* ── Delete Confirm Dialog ─────────────────────────────────────────── */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" /> Delete Sales Record
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            This will permanently remove this sales record and restore the sold stock back to inventory.
+          </p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" className="flex-1 rounded-sm font-bold" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button className="flex-1 rounded-sm font-bold bg-destructive hover:bg-destructive/90 text-white"
+              disabled={deleteSalesMutation.isPending}
+              onClick={() => { if (deleteTarget) { deleteSalesMutation.mutate(deleteTarget); setDeleteTarget(null); } }}>
+              {deleteSalesMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              {deleteSalesMutation.isPending ? "Deleting..." : "Yes, Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {/* Stock Error Modal */}
       <Dialog open={!!stockError} onOpenChange={(open) => !open && setStockError(null)}>
          <DialogContent className="sm:max-w-[400px]">
@@ -629,11 +780,11 @@ export default function InventoryOut({
              <div className="bg-muted p-4 rounded-md space-y-2 border">
                <div className="flex justify-between items-center text-sm">
                  <span className="text-muted-foreground font-semibold">Available:</span>
-                 <span className="font-bold text-lg">{stockError?.available.toFixed(2)} kg</span>
+                 <span className="font-bold text-lg">{stockError?.available.toFixed(2)} {(stockError?.item === "Fry" || stockError?.item === "Curry") ? "g" : "kg"}</span>
                </div>
                <div className="flex justify-between items-center text-sm">
                  <span className="text-muted-foreground font-semibold">Requested:</span>
-                 <span className="text-destructive font-bold text-lg">{stockError?.requested.toFixed(2)} kg</span>
+                 <span className="text-destructive font-bold text-lg">{stockError?.requested.toFixed(2)} {(stockError?.item === "Fry" || stockError?.item === "Curry") ? "g" : "kg"}</span>
                </div>
              </div>
            </div>
