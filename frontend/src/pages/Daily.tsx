@@ -269,7 +269,9 @@ export default function Daily() {
             <p className="text-sm text-muted-foreground">Configure exactly how much each item cuts and mixes should cost today.</p>
             {["fry", "curry", "bone", "boneless", "mixed"].map((cut) => (
               <div key={cut} className="flex items-center justify-between gap-4 border-b border-secondary pb-4 last:border-0 last:pb-0">
-                <label className="font-bold text-sm tracking-wide text-muted-foreground w-24 uppercase">{cut}</label>
+                <label className="font-bold text-sm tracking-wide text-muted-foreground w-32 uppercase">
+                  {cut}
+                </label>
                 <div className="relative flex-1">
                   <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
