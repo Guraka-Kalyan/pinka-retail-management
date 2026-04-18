@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Breadcrumb from "@/components/Breadcrumb";
 import DataTable from "@/components/DataTable";
 import { Button } from "@/components/ui/button";
@@ -7,10 +7,21 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Pencil, Trash2, Loader2 } from "lucide-react";
 import api from "@/lib/api";
-
+import { cn } from "@/lib/utils";
+import { MonthPicker } from "@/components/ui/month-picker";
+import { downloadSupplyPDF } from "@/utils/exportSupply";
+import { AdvancedDatePicker } from "@/components/ui/advanced-date-picker";
 export default function Supply() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
+
+  const [dateRange, setDateRange] = useState<"Today" | "This Week" | "Select Month" | "Custom">("Select Month");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
   const [inventoryIn, setInventoryIn] = useState<any[]>([]);
   const [records, setRecords] = useState<any[]>([]);
   const [shopsList, setShopsList] = useState<any[]>([]);
@@ -44,6 +55,59 @@ export default function Supply() {
     fetchData();
   }, []);
 
+  const { filteredInvIn, filteredRecords } = useMemo(() => {
+    let from = "";
+    let to = "";
+    const now = new Date();
+    
+    const formatLocalStr = (d: Date) => {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    };
+
+    if (dateRange === "Today") {
+      from = formatLocalStr(now);
+      to = from;
+    } else if (dateRange === "This Week") {
+      const weekAgo = new Date(now.getTime() - 7 * 86400000);
+      from = formatLocalStr(weekAgo);
+      to = formatLocalStr(now);
+    } else if (dateRange === "Select Month") {
+      const [yr, mo] = selectedMonth.split("-").map(Number);
+      from = `${yr}-${String(mo).padStart(2, "0")}-01`;
+      const lastDay = new Date(yr, mo, 0).getDate();
+      to = `${yr}-${String(mo).padStart(2, "0")}-${lastDay}`;
+    } else if (dateRange === "Custom") {
+      from = customStart;
+      to = customEnd;
+    }
+
+    if (!from || !to) return { filteredInvIn: inventoryIn, filteredRecords: records };
+
+    const fromDate = new Date(from);
+    fromDate.setHours(0, 0, 0, 0);
+    const toDate = new Date(to);
+    toDate.setHours(23, 59, 59, 999);
+
+    const checkDate = (dStr: string) => {
+        if (!dStr) return false;
+        const d = new Date(dStr);
+        return d >= fromDate && d <= toDate;
+    };
+
+    return {
+       filteredInvIn: inventoryIn.filter(r => checkDate(r.date)),
+       filteredRecords: records.filter(r => checkDate(r.date))
+    };
+  }, [inventoryIn, records, dateRange, customStart, customEnd]);
+
+  const handleExportPDF = () => {
+    const periodStr = dateRange === "Custom" ? `${customStart} to ${customEnd}` : dateRange;
+    downloadSupplyPDF(filteredInvIn, filteredRecords, "detailed", periodStr);
+  };
+
   const [shopNo, setShopNo] = useState("");
   const [otherName, setOtherName] = useState("");
   const [otherAddress, setOtherAddress] = useState("");
@@ -65,11 +129,6 @@ export default function Supply() {
   const total = (Number(mixed) || 0) + (Number(bone) || 0) + (Number(boneless) || 0);
 
   const selectedBatch = inventoryIn.find(i => (i.batchNo || i.batch) === batch);
-  const currentPrices = {
-    bone: selectedBatch?.bone?.pricePerKg || 0,
-    boneless: selectedBatch?.boneless?.pricePerKg || 0,
-    mixed: selectedBatch?.mixed?.pricePerKg || 0,
-  };
   
   const nMixed = Number(mixed) || 0;
   const nBone = Number(bone) || 0;
@@ -160,13 +219,11 @@ export default function Supply() {
 
   const startEditOut = (r: any) => {
     setEditingRecordId(r._id);
-    // Find if shopNo is in list
     const foundShop = shopsList.find(s => s.name === r.shopNo || s._id === r.shopNo || (r.shopId && s._id === r.shopId._id));
     if (foundShop) {
       setShopNo(foundShop._id);
     } else if (r.shopNo.startsWith("Others")) {
       setShopNo("Others");
-      // Try parsing Others (name - address) roughly
       const match = r.shopNo.match(/Others \((.*) - (.*)\)/);
       if (match) {
         setOtherName(match[1]);
@@ -203,10 +260,46 @@ export default function Supply() {
   return (
     <div className="animate-fade-in pb-12 w-full">
       <div className="flex flex-col gap-4 mb-8">
-        <Breadcrumb items={[{ label: "Inventory & Supply" }]} />
-        <div>
-          <h1 className="text-3xl font-black text-foreground tracking-tight">Inventory & Supply Management</h1>
-          <p className="text-sm text-muted-foreground mt-1 font-medium">Manage and distribute inventory stock to all retail shops.</p>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <Breadcrumb items={[{ label: "Inventory & Supply" }]} />
+            <h1 className="text-3xl font-black text-foreground tracking-tight mt-2">Inventory & Supply Dashboard</h1>
+            <p className="text-sm text-muted-foreground mt-1 font-medium">Manage packed meat inventory and shop supplies efficiently.</p>
+          </div>
+          
+          <div className="flex flex-wrap items-center gap-3 justify-end self-end sm:self-auto">
+            <div className="flex flex-wrap items-center gap-2 bg-primary/5 rounded-md p-1 border border-primary/10 w-fit">
+              {(["Today", "This Week", "Select Month", "Custom"] as const).map(t => (
+                <button
+                  key={t}
+                  onClick={() => setDateRange(t as any)}
+                  className={cn(
+                    "px-4 py-1.5 rounded-sm text-sm font-bold transition-all whitespace-nowrap",
+                    dateRange === t ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground hover:bg-primary/10"
+                  )}
+                >{t}</button>
+              ))}
+            </div>
+
+            {dateRange === "Select Month" && (
+              <MonthPicker value={selectedMonth} onChange={setSelectedMonth} />
+            )}
+
+            {dateRange === "Custom" && (
+              <div className="flex items-center gap-2 bg-card border rounded-sm px-3 py-1">
+                <AdvancedDatePicker value={customStart} onChange={setCustomStart} placeholder="Start" />
+                <span className="text-muted-foreground font-bold">–</span>
+                <AdvancedDatePicker value={customEnd} onChange={setCustomEnd} placeholder="End" />
+              </div>
+            )}
+
+            <Button 
+              onClick={handleExportPDF}
+              className="bg-red-500 hover:bg-red-600 text-white rounded-sm h-9 px-3 text-xs font-bold uppercase tracking-wider"
+            >
+              PDF Export
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -242,7 +335,7 @@ export default function Supply() {
               </span>
             )}},
           ]}
-          data={inventoryIn}
+          data={filteredInvIn}
           isLoading={isLoading}
         />
       </div>
@@ -426,7 +519,7 @@ export default function Supply() {
               </div>
             )},
           ]}
-          data={records}
+          data={filteredRecords}
           isLoading={isLoading}
         />
       </div>

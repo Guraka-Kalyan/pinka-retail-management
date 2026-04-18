@@ -261,7 +261,7 @@ sudo ls /etc/letsencrypt/live/
 # Should show: pinaka.space/  api.pinaka.space/
 ```
 
-### 5.1 Setup Auto-Renewal
+### 5.1 Setup Auto-Renewal & Disk Cleanup (Cronjobs)
 
 ```bash
 sudo crontab -e
@@ -269,7 +269,11 @@ sudo crontab -e
 
 Add at the bottom:
 ```
+# 1. SSL Auto-Renewal (Runs every Monday at 3:00 AM)
 0 3 * * 1 certbot renew --quiet && cd /home/ubuntu/pinka-retail-management && docker compose restart nginx
+
+# 2. Prevent Disk Full Error (Runs on the 1st of every month at 4:00 AM to clear old docker cache)
+0 4 1 * * docker system prune -af --volumes
 ```
 
 ---

@@ -192,8 +192,7 @@ export const downloadDashboardPDF = (data: ExportData) => {
     doc.text("Note: Estimated values are proportionally allocated based on inventory value. Generated from PINAKA.", 14, PH - 10);
     doc.text("Page " + i + " of " + total, PW - 14, PH - 10, { align: "right" });
   }
-
-  doc.save("Pinaka_Report_" + new Date().toISOString().slice(0, 10) + ".pdf");
+  doc.save("Pinaka_Dashboard_" + new Date().toISOString().slice(0, 10) + ".pdf");
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -303,6 +302,5 @@ export const downloadDashboardExcel = (data: ExportData) => {
     })),
     [16, 24, 26, 24, 22, 20, 20, 22, 26]
   ), "Profit Calculation");
-
-  XLSX.writeFile(wb, "Pinaka_Report_" + new Date().toISOString().slice(0, 10) + ".xlsx");
+  XLSX.writeFile(wb, "Pinaka_Dashboard_" + new Date().toISOString().slice(0, 10) + ".xlsx");
 };

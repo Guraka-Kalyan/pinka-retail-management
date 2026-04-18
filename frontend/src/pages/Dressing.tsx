@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Breadcrumb from "@/components/Breadcrumb";
 import DataTable from "@/components/DataTable";
@@ -8,7 +8,11 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Pencil, Trash2, ArrowLeft, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AdvancedDatePicker } from "@/components/ui/advanced-date-picker";
+import { cn } from "@/lib/utils";
 import api from "@/lib/api";
+import { MonthPicker } from "@/components/ui/month-picker";
+import { downloadDressingPDF } from "@/utils/exportDressing";
 
 const defaultPackaging = [
   { name: "Mixed", price: 380 },
@@ -19,6 +23,14 @@ export default function Dressing() {
   const navigate = useNavigate();
   const [records, setRecords] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const [dateRange, setDateRange] = useState<"Today" | "This Week" | "Select Month" | "Custom">("Select Month");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
 
   const fetchData = async () => {
     try {
@@ -40,6 +52,55 @@ export default function Dressing() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  const filteredRecords = useMemo(() => {
+    let from = "";
+    let to = "";
+    const now = new Date();
+    
+    const formatLocalStr = (d: Date) => {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    };
+
+    if (dateRange === "Today") {
+      from = formatLocalStr(now);
+      to = from;
+    } else if (dateRange === "This Week") {
+      const weekAgo = new Date(now.getTime() - 7 * 86400000);
+      from = formatLocalStr(weekAgo);
+      to = formatLocalStr(now);
+    } else if (dateRange === "Select Month") {
+      const [yr, mo] = selectedMonth.split("-").map(Number);
+      from = `${yr}-${String(mo).padStart(2, "0")}-01`;
+      const lastDay = new Date(yr, mo, 0).getDate();
+      to = `${yr}-${String(mo).padStart(2, "0")}-${lastDay}`;
+    } else if (dateRange === "Custom") {
+      from = customStart;
+      to = customEnd;
+    }
+
+    if (!from || !to) return records;
+
+    // We do simple string comparison for dates or construct full dates
+    const fromDate = new Date(from);
+    fromDate.setHours(0, 0, 0, 0);
+    const toDate = new Date(to);
+    toDate.setHours(23, 59, 59, 999);
+
+    return records.filter(r => {
+      if (!r.date) return false;
+      const d = new Date(r.date);
+      return d >= fromDate && d <= toDate;
+    });
+  }, [records, dateRange, customStart, customEnd]);
+
+  const handleExportPDF = () => {
+    const periodStr = dateRange === "Custom" ? `${customStart} to ${customEnd}` : dateRange;
+    downloadDressingPDF(filteredRecords, "detailed", periodStr);
+  };
 
   const [editingBatch, setEditingBatch] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -351,10 +412,48 @@ export default function Dressing() {
   return (
     <div className="animate-fade-in pb-12 w-full">
       <div className="flex flex-col gap-4 mb-8">
-        <Breadcrumb items={[{ label: "Dressing" }]} />
-        <div>
-          <h1 className="text-3xl font-black text-foreground tracking-tight">Dressing Management</h1>
-          <p className="text-sm text-muted-foreground mt-1 font-medium">Manage before and after slaughter processes and yields.</p>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <Breadcrumb items={[{ label: "Dressing" }]} />
+            <h1 className="text-3xl font-black text-foreground tracking-tight mt-2">Dressing Management</h1>
+            <p className="text-sm text-muted-foreground mt-1 font-medium">Manage before and after slaughter processes and yields.</p>
+          </div>
+          
+          <div className="flex flex-wrap items-center gap-3 justify-end self-end sm:self-auto">
+            <div className="flex flex-wrap items-center gap-2 bg-primary/5 rounded-md p-1 border border-primary/10 w-fit">
+              {(["Today", "This Week", "Select Month", "Custom"] as const).map(t => (
+                <button
+                  key={t}
+                  onClick={() => setDateRange(t as any)}
+                  className={cn(
+                    "px-4 py-1.5 rounded-sm text-sm font-bold transition-all whitespace-nowrap",
+                    dateRange === t ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground hover:bg-primary/10"
+                  )}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+
+            {dateRange === "Select Month" && (
+              <MonthPicker value={selectedMonth} onChange={setSelectedMonth} />
+            )}
+
+            {dateRange === "Custom" && (
+              <div className="flex items-center gap-2 bg-card border rounded-sm px-3 py-1">
+                <AdvancedDatePicker value={customStart} onChange={setCustomStart} placeholder="Start" />
+                <span className="text-muted-foreground font-bold">–</span>
+                <AdvancedDatePicker value={customEnd} onChange={setCustomEnd} placeholder="End" />
+              </div>
+            )}
+
+            <Button 
+              onClick={handleExportPDF}
+              className="bg-red-500 hover:bg-red-600 text-white rounded-sm h-9 px-3 text-xs font-bold uppercase tracking-wider"
+            >
+              PDF Export
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -770,7 +869,7 @@ export default function Dressing() {
               )
             },
           ]}
-          data={records}
+          data={filteredRecords}
           isLoading={isLoading}
         />
       </div>
