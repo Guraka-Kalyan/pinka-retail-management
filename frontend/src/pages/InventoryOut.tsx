@@ -45,7 +45,7 @@ interface OutRecord {
 
 export default function InventoryOut({
   shopIdFilter,
-  dateFilter = "Today",
+  dateFilter = "All",
   customStart,
   customEnd,
   salesModalOpen,
