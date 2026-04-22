@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Pencil, Trash2, ArrowLeft, Loader2 } from "lucide-react";
+import { Pencil, Trash2, ArrowLeft, Loader2, FileDown, ChevronDown, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AdvancedDatePicker } from "@/components/ui/advanced-date-picker";
 import { cn } from "@/lib/utils";
@@ -97,9 +97,26 @@ export default function Dressing() {
     });
   }, [records, dateRange, customStart, customEnd]);
 
+  // ── Export State ──────────────────────────────────────────────────
+  const [isExportOpen, setIsExportOpen] = useState(false);
+  const [batchMode, setBatchMode] = useState<"all" | "specific">("all");
+  const [selectedBatches, setSelectedBatches] = useState<string[]>([]);
+
+  const allBatchNos = useMemo(() =>
+    [...new Set(filteredRecords.map((r: any) => r.batchNo || r.batch).filter(Boolean))]
+  , [filteredRecords]);
+
+  const toggleBatch = (b: string) =>
+    setSelectedBatches(prev => prev.includes(b) ? prev.filter(x => x !== b) : [...prev, b]);
+
   const handleExportPDF = () => {
     const periodStr = dateRange === "Custom" ? `${customStart} to ${customEnd}` : dateRange;
-    downloadDressingPDF(filteredRecords, "detailed", periodStr);
+    const exportRecords = batchMode === "all"
+      ? filteredRecords
+      : filteredRecords.filter((r: any) => selectedBatches.includes(r.batchNo || r.batch));
+    if (exportRecords.length === 0) return;
+    downloadDressingPDF(exportRecords, "detailed", periodStr);
+    setIsExportOpen(false);
   };
 
   const [editingBatch, setEditingBatch] = useState<string | null>(null);
@@ -447,12 +464,105 @@ export default function Dressing() {
               </div>
             )}
 
-            <Button 
-              onClick={handleExportPDF}
-              className="bg-red-500 hover:bg-red-600 text-white rounded-sm h-9 px-3 text-xs font-bold uppercase tracking-wider"
+            <Button
+              onClick={() => { setBatchMode("all"); setSelectedBatches([]); setIsExportOpen(true); }}
+              className="bg-red-500 hover:bg-red-600 text-white rounded-sm h-9 px-3 text-xs font-bold uppercase tracking-wider flex items-center gap-1"
             >
-              PDF Export
+              <FileDown className="h-3.5 w-3.5" /> PDF Export
             </Button>
+
+            {/* ── Export Options Dialog ───────────────────────────── */}
+            <Dialog open={isExportOpen} onOpenChange={setIsExportOpen}>
+              <DialogContent className="sm:max-w-[420px]">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-base">
+                    <FileDown className="h-4 w-4 text-red-500" /> Export Dressing PDF
+                  </DialogTitle>
+                </DialogHeader>
+
+                <div className="space-y-4 py-2">
+                  {/* Batch Mode Toggle */}
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Batch Selection</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => { setBatchMode("all"); setSelectedBatches([]); }}
+                        className={`h-10 rounded-sm border-2 text-sm font-bold transition-all ${
+                          batchMode === "all"
+                            ? "border-red-500 bg-red-50 text-red-600"
+                            : "border-border text-muted-foreground hover:border-red-300"
+                        }`}
+                      >
+                        All Batches
+                      </button>
+                      <button
+                        onClick={() => setBatchMode("specific")}
+                        className={`h-10 rounded-sm border-2 text-sm font-bold transition-all ${
+                          batchMode === "specific"
+                            ? "border-red-500 bg-red-50 text-red-600"
+                            : "border-border text-muted-foreground hover:border-red-300"
+                        }`}
+                      >
+                        Specific Batches
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Batch Multi-Select */}
+                  {batchMode === "specific" && (
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                        Select Batches ({selectedBatches.length} selected)
+                      </Label>
+                      <div className="border rounded-sm max-h-44 overflow-y-auto divide-y">
+                        {allBatchNos.length === 0 ? (
+                          <p className="text-xs text-muted-foreground p-3">No batches in current date range.</p>
+                        ) : allBatchNos.map((b: string) => (
+                          <button
+                            key={b}
+                            onClick={() => toggleBatch(b)}
+                            className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between hover:bg-muted/40 transition-colors ${
+                              selectedBatches.includes(b) ? "bg-red-50 font-bold text-red-600" : ""
+                            }`}
+                          >
+                            <span>{b}</span>
+                            {selectedBatches.includes(b) && <X className="h-3.5 w-3.5" />}
+                          </button>
+                        ))}
+                      </div>
+                      {selectedBatches.length > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          Selected: {selectedBatches.join(", ")}
+                          {selectedBatches.length === 1 && <span className="ml-1 text-red-500 font-semibold">(KPI card layout)</span>}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Info Banner */}
+                  <div className="bg-muted/30 border rounded-sm px-3 py-2 text-xs text-muted-foreground">
+                    {batchMode === "all"
+                      ? `Exporting all ${filteredRecords.length} batch(es) in current date range with bar charts.`
+                      : selectedBatches.length === 1
+                        ? "Single batch selected — PDF will use KPI card layout (BSW, ASW, Yield, Packed, Profit, Wastage)."
+                        : selectedBatches.length > 1
+                          ? `${selectedBatches.length} batches selected — PDF will use bar chart layout.`
+                          : "Select at least one batch to export."}
+                  </div>
+                </div>
+
+                <DialogFooter className="gap-2">
+                  <Button variant="outline" className="rounded-sm font-bold" onClick={() => setIsExportOpen(false)}>Cancel</Button>
+                  <Button
+                    className="bg-red-500 hover:bg-red-600 text-white rounded-sm font-bold px-6"
+                    disabled={batchMode === "specific" && selectedBatches.length === 0}
+                    onClick={handleExportPDF}
+                  >
+                    <FileDown className="h-4 w-4 mr-1" /> Download PDF
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
       </div>

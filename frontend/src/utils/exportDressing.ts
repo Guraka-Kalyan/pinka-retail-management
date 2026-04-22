@@ -93,67 +93,123 @@ export const downloadDressingPDF = (records: any[], type: "executive" | "detaile
   const chartsStartY = (doc as any).lastAutoTable.finalY + 15;
   sectionTitle("2. Visual Summary", chartsStartY - 5);
 
-  const chartDataBswAsw = records.map(r => ({
-    label: String(r.batchNo || r.batch || "N/A"),
-    value1: Number(r.animalWeight) || 0,
-    value2: Number(r.totalWeight) || 0
-  }));
+  const isSingleBatch = records.length === 1;
 
-  const chartDataYield = records.map(r => {
-    const b = Number(r.animalWeight) || 0;
-    const a = Number(r.totalWeight) || 0;
-    return {
-      label: String(r.batchNo || r.batch || "N/A"),
-      value1: b > 0 ? (a/b)*100 : 0
-    };
-  });
-
-  const chartDataProfit = records.map(r => {
-    let pVal = 0;
+  if (isSingleBatch) {
+    // ── KPI Card Grid for Single Batch ────────────────────────────────────────
+    const r = records[0];
+    const bsw    = Number(r.animalWeight) || 0;
+    const asw    = Number(r.totalWeight)  || 0;
+    const usable = Number(r.usableMeat)   || 0;
+    const cost   = Number(r.cost)         || 0;
+    const yield_ = bsw > 0 ? ((asw / bsw) * 100).toFixed(1) + "%" : "N/A";
+    const wastage = r.wastagePercent !== "-" ? `${r.wastagePercent}%` : (bsw > 0 ? (((bsw - asw) / bsw) * 100).toFixed(1) + "%" : "N/A");
+    let packedQty = 0; let packedVal = 0;
     if (r.status === "Packed" && r.pkgItems) {
       ["bone", "boneless", "mixed"].forEach(k => {
         if (r.pkgItems[k]) {
-          pVal += (Number(r.pkgItems[k].qty) || 0) * (Number(r.pkgItems[k].pricePerKg) || 0);
+          packedQty += Number(r.pkgItems[k].qty) || 0;
+          packedVal += (Number(r.pkgItems[k].qty) || 0) * (Number(r.pkgItems[k].pricePerKg) || 0);
         }
       });
     }
-    const c = Number(r.cost) || 0;
-    return {
+    const profit = packedVal - cost;
+
+    const kpis = [
+      { label: "Before Slaughter (BSW)", value: fmtWt(bsw), color: [52, 152, 219] as [number,number,number] },
+      { label: "After Slaughter (ASW)",  value: fmtWt(asw), color: [231, 76, 60] as [number,number,number] },
+      { label: "Yield %",                value: yield_,     color: [46, 204, 113] as [number,number,number] },
+      { label: "Packed Meat",            value: fmtWt(packedQty), color: [155, 89, 182] as [number,number,number] },
+      { label: "Profit / Loss",          value: (profit >= 0 ? "+ " : "- ") + fmtMoney(Math.abs(profit)), color: profit >= 0 ? [39,174,96] as [number,number,number] : [192,57,43] as [number,number,number] },
+      { label: "Wastage %",              value: wastage,    color: [243, 156, 18] as [number,number,number] },
+    ];
+
+    const cardW = (PW - 28 - 10) / 3;  // 3 cards per row, 2 rows
+    const cardH = 30;
+    const gapX  = 5;
+    const gapY  = 6;
+
+    kpis.forEach((kpi, i) => {
+      const col = i % 3;
+      const row = Math.floor(i / 3);
+      const cx  = 14 + col * (cardW + gapX);
+      const cy  = chartsStartY + row * (cardH + gapY);
+
+      // Card background
+      doc.setFillColor(245, 245, 245);
+      doc.roundedRect(cx, cy, cardW, cardH, 2, 2, "F");
+
+      // Left accent bar
+      doc.setFillColor(...kpi.color);
+      doc.roundedRect(cx, cy, 3, cardH, 1, 1, "F");
+
+      // Label
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(120, 120, 120);
+      doc.text(kpi.label, cx + 6, cy + 9);
+
+      // Value
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.setTextColor(...kpi.color);
+      doc.text(kpi.value, cx + 6, cy + 22);
+    });
+
+    // Batch info line below cards
+    const infoY = chartsStartY + 2 * (cardH + gapY) + 8;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Batch: ${r.batchNo || r.batch || "-"}   |   Animal: ${r.animalId || "-"}   |   Date: ${r.date || "-"}   |   Status: ${r.status || "-"}`, 14, infoY);
+
+  } else {
+    // ── Bar Charts for Multi-Batch ────────────────────────────────────────────
+    const chartDataBswAsw = records.map(r => ({
       label: String(r.batchNo || r.batch || "N/A"),
-      value1: pVal > 0 ? pVal - c : 0
-    };
-  });
+      value1: Number(r.animalWeight) || 0,
+      value2: Number(r.totalWeight) || 0
+    }));
 
-  // Split into 4 quadrants
-  // Chart 1: BSW vs ASW
-  drawNativeBarChart(doc, {
-    x: 14, y: chartsStartY, w: (PW/2) - 20, h: 50,
-    title: "Before vs After Slaughter (kg)",
-    data: chartDataBswAsw,
-    color1: [52, 152, 219],
-    color2: [231, 76, 60],
-    label1: "BSW", label2: "ASW"
-  });
+    const chartDataYield = records.map(r => {
+      const b = Number(r.animalWeight) || 0;
+      const a = Number(r.totalWeight) || 0;
+      return { label: String(r.batchNo || r.batch || "N/A"), value1: b > 0 ? (a/b)*100 : 0 };
+    });
 
-  // Chart 2: Yield %
-  drawNativeBarChart(doc, {
-    x: PW/2 + 5, y: chartsStartY, w: (PW/2) - 20, h: 50,
-    title: "Yield % by Batch",
-    data: chartDataYield,
-    color1: [46, 204, 113],
-    label1: "Yield %",
-    yAxisLabel: "%"
-  });
+    const chartDataProfit = records.map(r => {
+      let pVal = 0;
+      if (r.status === "Packed" && r.pkgItems) {
+        ["bone", "boneless", "mixed"].forEach(k => {
+          if (r.pkgItems[k]) pVal += (Number(r.pkgItems[k].qty) || 0) * (Number(r.pkgItems[k].pricePerKg) || 0);
+        });
+      }
+      const c = Number(r.cost) || 0;
+      return { label: String(r.batchNo || r.batch || "N/A"), value1: pVal > 0 ? pVal - c : 0 };
+    });
 
-  // Chart 3: Profit by Batch
-  drawNativeBarChart(doc, {
-    x: 14, y: chartsStartY + 60, w: PW - 28, h: 60,
-    title: "Profit / Loss by Batch (Rs)",
-    data: chartDataProfit,
-    color1: [155, 89, 182],
-    label1: "Profit",
-    isCurrency: true
-  });
+    drawNativeBarChart(doc, {
+      x: 14, y: chartsStartY, w: (PW/2) - 20, h: 50,
+      title: "Before vs After Slaughter (kg)",
+      data: chartDataBswAsw,
+      color1: [52, 152, 219], color2: [231, 76, 60],
+      label1: "BSW", label2: "ASW"
+    });
+
+    drawNativeBarChart(doc, {
+      x: PW/2 + 5, y: chartsStartY, w: (PW/2) - 20, h: 50,
+      title: "Yield % by Batch",
+      data: chartDataYield,
+      color1: [46, 204, 113], label1: "Yield %", yAxisLabel: "%"
+    });
+
+    drawNativeBarChart(doc, {
+      x: 14, y: chartsStartY + 60, w: PW - 28, h: 60,
+      title: "Profit / Loss by Batch (Rs)",
+      data: chartDataProfit,
+      color1: [155, 89, 182], label1: "Profit", isCurrency: true
+    });
+  }
 
   // ================= PAGE 2: DETAILED TABLE =================
   if (type === "detailed") {

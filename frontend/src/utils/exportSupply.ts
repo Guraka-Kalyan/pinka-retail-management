@@ -107,65 +107,121 @@ export const downloadSupplyPDF = (inventoryIn: any[], suppliesOut: any[], type: 
   const chartsStartY = (doc as any).lastAutoTable.finalY + 15;
   sectionTitle("2. Visual Summary", chartsStartY - 5);
 
-  const chartDataInv = inventoryIn.map(i => ({
-    label: String(i.batchNo || i.batch || "N/A"),
-    value1: Number(i.totalWeight || i.total_weight || i.total) || 0
-  }));
+  const isSingleBatch = inventoryIn.length === 1;
 
-  const chartDataVs = [
-    { label: "Shop Supply", value1: shopSupplyAmt },
-    { label: "Other Supply", value1: otherSupplyAmt }
-  ];
+  if (isSingleBatch) {
+    // ── KPI Card Grid for Single Batch ────────────────────────────────────────
+    const inv = inventoryIn[0];
+    const batchLabel = inv.batchNo || inv.batch || "-";
+    const stockWt  = Number(inv.totalWeight || inv.total_weight || inv.total) || 0;
+    const stockAmt = Number(inv.totalAmount || inv.total_amount) || 0;
 
-  const chartDataRev = Object.keys(revByBatchMap).map(k => ({
-    label: k,
-    value1: revByBatchMap[k]
-  }));
+    let supplyOutWt = 0;
+    let shopRev = 0;
+    let otherRev = 0;
+    let extraRev = 0;
+    suppliesOut.forEach(s => {
+      supplyOutWt += (Number(s.bone)||0) + (Number(s.boneless)||0) + (Number(s.mixed)||0);
+      extraRev    += Number(s.extra) || 0;
+      if (s.shopId && s.shopNo && !s.shopNo.startsWith("Others")) shopRev  += Number(s.totalAmount) || 0;
+      else                                                          otherRev += Number(s.totalAmount) || 0;
+    });
 
-  const chartDataWtMv = Object.keys(wtByBatchMap).map(k => ({
-    label: k,
-    value1: wtByBatchMap[k].inv,
-    value2: wtByBatchMap[k].sup
-  }));
+    const kpis = [
+      { label: "Packed Stock (In)",       value: fmtWt(stockWt),      color: [52, 152, 219]  as [number,number,number] },
+      { label: "Packed Stock Value",       value: fmtMoney(stockAmt),  color: [155, 89, 182]  as [number,number,number] },
+      { label: "Total Supply Out",         value: fmtWt(supplyOutWt),  color: [231, 76, 60]   as [number,number,number] },
+      { label: "Shop Supply Revenue",      value: fmtMoney(shopRev),   color: [46, 204, 113]  as [number,number,number] },
+      { label: "Other Supply Revenue",     value: fmtMoney(otherRev),  color: [230, 126, 34]  as [number,number,number] },
+      { label: "Extra Charges Collected",  value: fmtMoney(extraRev),  color: [243, 156, 18]  as [number,number,number] },
+    ];
 
-  // Chart 1: Stock by Batch (In)
-  drawNativeBarChart(doc, {
-    x: 14, y: chartsStartY, w: (PW/2) - 20, h: 50,
-    title: "Packed Stock by Batch (kg)",
-    data: chartDataInv,
-    color1: [52, 152, 219],
-    label1: "Weight In"
-  });
+    const cardW = (PW - 28 - 10) / 3;
+    const cardH = 30;
+    const gapX  = 5;
+    const gapY  = 6;
 
-  // Chart 2: Shop vs Other
-  drawNativeBarChart(doc, {
-    x: PW/2 + 5, y: chartsStartY, w: (PW/2) - 20, h: 50,
-    title: "Shop Supply vs Other Supply",
-    data: chartDataVs,
-    color1: [142, 68, 173],
-    label1: "Revenue",
-    isCurrency: true
-  });
+    kpis.forEach((kpi, i) => {
+      const col = i % 3;
+      const row = Math.floor(i / 3);
+      const cx  = 14 + col * (cardW + gapX);
+      const cy  = chartsStartY + row * (cardH + gapY);
 
-  // Chart 3: Supply Revenue by Batch
-  drawNativeBarChart(doc, {
-    x: 14, y: chartsStartY + 60, w: (PW/2) - 20, h: 50,
-    title: "Supply Revenue by Batch (Rs)",
-    data: chartDataRev,
-    color1: [230, 126, 34],
-    label1: "Revenue",
-    isCurrency: true
-  });
+      doc.setFillColor(245, 245, 245);
+      doc.roundedRect(cx, cy, cardW, cardH, 2, 2, "F");
 
-  // Chart 4: Weight Movement (In vs Out)
-  drawNativeBarChart(doc, {
-    x: PW/2 + 5, y: chartsStartY + 60, w: (PW/2) - 20, h: 50,
-    title: "Weight Movement: In vs Out (kg)",
-    data: chartDataWtMv,
-    color1: [46, 204, 113],
-    color2: [231, 76, 60],
-    label1: "Inv In", label2: "Supplied Out"
-  });
+      doc.setFillColor(...kpi.color);
+      doc.roundedRect(cx, cy, 3, cardH, 1, 1, "F");
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(120, 120, 120);
+      doc.text(kpi.label, cx + 6, cy + 9);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.setTextColor(...kpi.color);
+      doc.text(kpi.value, cx + 6, cy + 22);
+    });
+
+    const infoY = chartsStartY + 2 * (cardH + gapY) + 8;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Batch: ${batchLabel}   |   Date: ${inv.date || "-"}   |   Status: ${stockWt > 0 ? "Available" : "Empty"}   |   ${suppliesOut.length} supply record(s)`, 14, infoY);
+
+  } else {
+    // ── Bar Charts for Multi-Batch ────────────────────────────────────────────
+    const chartDataInv = inventoryIn.map(i => ({
+      label: String(i.batchNo || i.batch || "N/A"),
+      value1: Number(i.totalWeight || i.total_weight || i.total) || 0
+    }));
+
+    const chartDataVs = [
+      { label: "Shop Supply",  value1: shopSupplyAmt },
+      { label: "Other Supply", value1: otherSupplyAmt }
+    ];
+
+    const chartDataRev = Object.keys(revByBatchMap).map(k => ({
+      label: k, value1: revByBatchMap[k]
+    }));
+
+    const chartDataWtMv = Object.keys(wtByBatchMap).map(k => ({
+      label: k,
+      value1: wtByBatchMap[k].inv,
+      value2: wtByBatchMap[k].sup
+    }));
+
+    drawNativeBarChart(doc, {
+      x: 14, y: chartsStartY, w: (PW/2) - 20, h: 50,
+      title: "Packed Stock by Batch (kg)",
+      data: chartDataInv,
+      color1: [52, 152, 219], label1: "Weight In"
+    });
+
+    drawNativeBarChart(doc, {
+      x: PW/2 + 5, y: chartsStartY, w: (PW/2) - 20, h: 50,
+      title: "Shop Supply vs Other Supply",
+      data: chartDataVs,
+      color1: [142, 68, 173], label1: "Revenue", isCurrency: true
+    });
+
+    drawNativeBarChart(doc, {
+      x: 14, y: chartsStartY + 60, w: (PW/2) - 20, h: 50,
+      title: "Supply Revenue by Batch (Rs)",
+      data: chartDataRev,
+      color1: [230, 126, 34], label1: "Revenue", isCurrency: true
+    });
+
+    drawNativeBarChart(doc, {
+      x: PW/2 + 5, y: chartsStartY + 60, w: (PW/2) - 20, h: 50,
+      title: "Weight Movement: In vs Out (kg)",
+      data: chartDataWtMv,
+      color1: [46, 204, 113], color2: [231, 76, 60],
+      label1: "Inv In", label2: "Supplied Out"
+    });
+  }
+
 
   // ================= PAGE 2: DETAILED TABLE =================
   if (type === "detailed") {
