@@ -127,6 +127,11 @@ export default function InventoryOut({
   // editingRecord ≠ null means the form is in "update" mode (PUT instead of POST)
   const [editingRecord, setEditingRecord] = useState<OutRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  // ── Export State ──────────────────────────────────────────────────────────────
+  const [exportRange, setExportRange] = useState<"Daily" | "Weekly" | "Monthly" | "Custom">("Daily");
+  const [exportStart, setExportStart] = useState("");
+  const [exportEnd, setExportEnd] = useState("");
+  const [exportFormat, setExportFormat] = useState<"CSV" | "PDF">("CSV");
 
   // ── Calculations (Memoized) ──────────────────────────────────────────────────
   const {
@@ -174,16 +179,16 @@ export default function InventoryOut({
     const availMixed = liveStock?.mixedStock || 0;
     const availFryKg = liveStock?.fryStock || 0;
     const availCurryKg = liveStock?.curryStock || 0;
-    const availFry = Math.round(availFryKg * 1000);    // display in grams, no float junk
-    const availCurry = Math.round(availCurryKg * 1000);   // display in grams, no float junk
+    const availFry = parseFloat((availFryKg * 1000).toFixed(2));   // display in grams, preserve decimals
+    const availCurry = parseFloat((availCurryKg * 1000).toFixed(2));  // display in grams, preserve decimals
     const totalStock = parseFloat((availBone + availBoneless + availMixed + availFryKg + availCurryKg).toFixed(3));
 
     // 4. Sold KPIs — frySold/currySold stored as kg in DB, display as grams
     const totalBoneSold = parseFloat(filtered.reduce((s: number, r: any) => s + (Number(r.boneSold) || 0), 0).toFixed(3));
     const totalBonelessSold = parseFloat(filtered.reduce((s: number, r: any) => s + (Number(r.bonelessSold) || 0), 0).toFixed(3));
     const totalMixedSold = parseFloat(filtered.reduce((s: number, r: any) => s + (Number(r.mixedSold) || 0), 0).toFixed(3));
-    const totalFrySold = Math.round(filtered.reduce((s: number, r: any) => s + (Number(r.frySold) || 0), 0) * 1000);
-    const totalCurrySold = Math.round(filtered.reduce((s: number, r: any) => s + (Number(r.currySold) || 0), 0) * 1000);
+    const totalFrySold = parseFloat((filtered.reduce((s: number, r: any) => s + (Number(r.frySold) || 0), 0) * 1000).toFixed(2));
+    const totalCurrySold = parseFloat((filtered.reduce((s: number, r: any) => s + (Number(r.currySold) || 0), 0) * 1000).toFixed(2));
     const totalCash = filtered.reduce((s: number, r: any) => s + (Number(r.cash) || 0), 0);
     const totalPhonePe = filtered.reduce((s: number, r: any) => s + (Number(r.phonePe) || 0), 0);
     const discountedAmount = filtered.reduce((s: number, r: any) => s + (Number(r.discountGiven) || 0), 0);
@@ -251,8 +256,8 @@ export default function InventoryOut({
       if (reqBone > liveStock.boneStock) return setStockError({ item: "Bone", available: liveStock.boneStock, requested: reqBone, field: "Bone" });
       if (reqBoneless > liveStock.bonelessStock) return setStockError({ item: "Boneless", available: liveStock.bonelessStock, requested: reqBoneless, field: "Boneless" });
       if (reqMixed > liveStock.mixedStock) return setStockError({ item: "Mixed", available: liveStock.mixedStock, requested: reqMixed, field: "Mixed" });
-      if (reqFryKg > liveStock.fryStock) return setStockError({ item: "Fry", available: liveStock.fryStock * 1000, requested: Number(frySold) || 0, field: "Fry" });
-      if (reqCurryKg > liveStock.curryStock) return setStockError({ item: "Curry", available: liveStock.curryStock * 1000, requested: Number(currySold) || 0, field: "Curry" });
+      if (reqFryKg > liveStock.fryStock) return setStockError({ item: "Fry", available: parseFloat((liveStock.fryStock * 1000).toFixed(2)), requested: Number(frySold) || 0, field: "Fry" });
+      if (reqCurryKg > liveStock.curryStock) return setStockError({ item: "Curry", available: parseFloat((liveStock.curryStock * 1000).toFixed(2)), requested: Number(currySold) || 0, field: "Curry" });
     }
 
     // Payload: fry/curry saved as kg in backend (grams ÷ 1000)
@@ -629,8 +634,8 @@ export default function InventoryOut({
                 { header: "Date", accessor: "date" },
                 { header: "Bone (kg)", accessor: (r: OutRecord) => `${r.boneSold}` },
                 { header: "Boneless (kg)", accessor: (r: OutRecord) => `${r.bonelessSold}` },
-                { header: "Fry Sale (g)", accessor: (r: OutRecord) => `${Math.round((Number(r.frySold) || 0) * 1000)} g` },
-                { header: "Curry Sale (g)", accessor: (r: OutRecord) => `${Math.round((Number(r.currySold) || 0) * 1000)} g` },
+                { header: "Fry Sale (g)", accessor: (r: OutRecord) => `${parseFloat(((Number(r.frySold) || 0) * 1000).toFixed(2))} g` },
+                { header: "Curry Sale (g)", accessor: (r: OutRecord) => `${parseFloat(((Number(r.currySold) || 0) * 1000).toFixed(2))} g` },
                 { header: "Mixed Sale (kg)", accessor: (r: OutRecord) => `${r.mixedSold || 0}` },
                 { header: "Total (₹)", accessor: (r: OutRecord) => `₹${r.total.toLocaleString("en-IN")}` },
                 { header: "Discount (₹)", accessor: (r: OutRecord) => `₹${(r.discountGiven || 0).toLocaleString("en-IN")}` },
@@ -655,8 +660,8 @@ export default function InventoryOut({
                           // Pre-fill form with existing sale values
                           setBoneSold(String(r.boneSold ?? ""));
                           setBonelessSold(String(r.bonelessSold ?? ""));
-                          setFrySold(String(Math.round((Number(r.frySold) || 0) * 1000)));
-                          setCurrySold(String(Math.round((Number(r.currySold) || 0) * 1000)));
+                          setFrySold(String(parseFloat(((Number(r.frySold) || 0) * 1000).toFixed(2))));
+                          setCurrySold(String(parseFloat(((Number(r.currySold) || 0) * 1000).toFixed(2))));
                           setMixedSold(String(r.mixedSold ?? ""));
                           setCash(String(r.cash ?? ""));
                           setPhonePe(String(r.phonePe ?? ""));
@@ -702,8 +707,8 @@ export default function InventoryOut({
                 {[
                   { label: "Bone", qty: `${selectedBill.boneSold} kg`, show: Number(selectedBill.boneSold) > 0 },
                   { label: "Boneless", qty: `${selectedBill.bonelessSold} kg`, show: Number(selectedBill.bonelessSold) > 0 },
-                  { label: "Fry", qty: `${Math.round((Number(selectedBill.frySold) || 0) * 1000)} g`, show: Number(selectedBill.frySold) > 0 },
-                  { label: "Curry", qty: `${Math.round((Number(selectedBill.currySold) || 0) * 1000)} g`, show: Number(selectedBill.currySold) > 0 },
+                  { label: "Fry", qty: `${parseFloat(((Number(selectedBill.frySold) || 0) * 1000).toFixed(2))} g`, show: Number(selectedBill.frySold) > 0 },
+                  { label: "Curry", qty: `${parseFloat(((Number(selectedBill.currySold) || 0) * 1000).toFixed(2))} g`, show: Number(selectedBill.currySold) > 0 },
                   { label: "Mixed", qty: `${selectedBill.mixedSold} kg`, show: Number(selectedBill.mixedSold) > 0 },
                 ].filter(i => i.show).map(item => (
                   <div key={item.label} className="flex justify-between items-center text-sm py-1 border-b border-dashed last:border-0">

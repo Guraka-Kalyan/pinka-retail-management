@@ -6,7 +6,7 @@ import Breadcrumb from "@/components/Breadcrumb";
 import InventoryIn from "@/pages/InventoryIn";
 import Preparation from "@/pages/Preparation";
 import Costs from "@/pages/Costs";
-import { 
+import {
   Store, MapPin, Phone, Activity, LayoutGrid, Plus, DownloadCloud,
   IndianRupee, CookingPot, ChevronLeft, ChevronRight
 } from "lucide-react";
@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter
 } from "@/components/ui/dialog";
-import { 
+import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line
 } from 'recharts';
@@ -31,7 +31,7 @@ export default function ShopDashboard() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"overview" | "inventory-in" | "preparation" | "costs">("overview");
-  
+
   const [timeframe, setTimeframe] = useState<"Today" | "This Week" | "This Month" | "Custom">("This Week");
 
   const todayStr = new Date().toISOString().split("T")[0];
@@ -53,7 +53,7 @@ export default function ShopDashboard() {
         api.get(`/shops/${id}/daily-costs`),
         api.get(`/shops/${id}/stock`)
       ]);
-      
+
       const allShops = shopsRes.data.data || [];
       const shop = allShops.find((s: any) => s._id === id || s.id === id);
 
@@ -101,7 +101,7 @@ export default function ShopDashboard() {
     const totalSalesVal = _filteredSales.reduce((s: number, r: any) => s + (Number(r.total) || 0), 0);
     const totalDiscountVal = _filteredSales.reduce((s: number, r: any) => s + (Number(r.discountGiven) || 0), 0);
     const opCostVal = _filteredCosts.reduce((s: number, r: any) => s + (Number(r.total) || 0), 0);
-      
+
     const totalExpensesVal = opCostVal + totalDiscountVal;
     const netResultVal = totalSalesVal - totalExpensesVal;
 
@@ -109,16 +109,16 @@ export default function ShopDashboard() {
     const totalBoneIn = invIn.reduce((s: number, r: any) => s + (Number(r.bone) || 0), 0);
     const totalBonelessIn = invIn.reduce((s: number, r: any) => s + (Number(r.boneless) || 0), 0);
     const totalMixedIn = invIn.reduce((s: number, r: any) => s + (Number(r.mixed) || 0), 0);
-    
+
     const overallBoneSold = salesData.reduce((s: number, r: any) => s + (Number(r.boneSold) || 0), 0);
     const overallBonelessSold = salesData.reduce((s: number, r: any) => s + (Number(r.bonelessSold) || 0), 0);
     const overallMixedSold = salesData.reduce((s: number, r: any) => s + (Number(r.mixedSold) || 0), 0);
-    
+
     const overallBoneUsed = preps.reduce((s: number, r: any) => s + (Number(r.boneUsed) || 0), 0);
     const overallBonelessUsed = preps.reduce((s: number, r: any) => s + (Number(r.bonelessUsed) || 0), 0);
     const totalFryPrep = preps.reduce((s: number, r: any) => s + (Number(r.fryPrep) || 0), 0);
     const totalCurryPrep = preps.reduce((s: number, r: any) => s + (Number(r.curryPrep) || 0), 0);
-    
+
     const overallFrySold = salesData.reduce((s: number, r: any) => s + (Number(r.frySold) || 0), 0);
     const overallCurrySold = salesData.reduce((s: number, r: any) => s + (Number(r.currySold) || 0), 0);
 
@@ -133,7 +133,7 @@ export default function ShopDashboard() {
       netResultVal,
       totalSalesVal,
       totalExpensesVal,
-      totalStock: Math.max(0, availBone) + Math.max(0, availBoneless) + Math.max(0, availMixed) + Math.max(0, availFry) + Math.max(0, availCurry),
+      totalStock: parseFloat((Math.max(0, availBone) + Math.max(0, availBoneless) + Math.max(0, availMixed) + Math.max(0, availFry) + Math.max(0, availCurry)).toFixed(3)),
       cash: _filteredSales.reduce((s: number, r: any) => s + (Number(r.cash) || 0), 0),
       phonepe: _filteredSales.reduce((s: number, r: any) => s + (Number(r.phonePe) || 0), 0),
       boneSold: _filteredSales.reduce((s: number, r: any) => s + (Number(r.boneSold) || 0), 0),
@@ -184,7 +184,7 @@ export default function ShopDashboard() {
 
   const shopName = currentShop?.name || "Pinaka Default Shop";
   const displayId = currentShop?.code || currentShop?.displayId || id?.toUpperCase() || "SHP-NEW";
-  
+
   return (
     <div className="animate-fade-in pb-12 w-full">
       <div className="flex flex-col gap-4 mb-8">
@@ -194,17 +194,17 @@ export default function ShopDashboard() {
             <div className="flex items-center gap-3">
               <h1 className="text-3xl font-black text-foreground tracking-tight">{isLoading ? <Skeleton className="w-64 h-8" /> : shopName}</h1>
               {!isLoading && (
-                 <span className="badge-success text-xs font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-success/20">Active</span>
+                <span className="badge-success text-xs font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-success/20">Active</span>
               )}
             </div>
-            
+
             <div className="flex items-center gap-4 text-sm font-semibold text-muted-foreground mt-1">
               <div className="flex items-center gap-1.5"><Store className="w-4 h-4" /> {isLoading ? <Skeleton className="w-16 h-4" /> : displayId}</div>
               <div className="flex items-center gap-1.5"><Phone className="w-4 h-4" /> {isLoading ? <Skeleton className="w-24 h-4" /> : currentShop?.phone || "N/A"}</div>
               <div className="flex items-center gap-1.5"><MapPin className="w-4 h-4" /> {isLoading ? <Skeleton className="w-32 h-4" /> : currentShop?.location || "N/A"}</div>
             </div>
           </div>
-          
+
           <div className="flex flex-wrap gap-3">
             {/* Prev / Next shop navigation */}
             {(() => {
@@ -222,7 +222,7 @@ export default function ShopDashboard() {
                     <ChevronLeft className="w-4 h-4" />
                   </Button>
                   <span className="text-xs text-muted-foreground font-semibold px-1 select-none">
-                     {allShops.length > 0 ? `${idx + 1} / ${allShops.length}` : "- / -"}
+                    {allShops.length > 0 ? `${idx + 1} / ${allShops.length}` : "- / -"}
                   </span>
                   <Button
                     variant="outline"
@@ -265,7 +265,7 @@ export default function ShopDashboard() {
       {/* Content Rendering based on Tab */}
       {activeTab === "overview" && (
         <div className="bg-card rounded-none p-8 shadow-none border border-border">
-          
+
           <div className="flex flex-col mb-8 gap-6">
             <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-center">
               <div>
@@ -273,14 +273,14 @@ export default function ShopDashboard() {
                 <p className="text-sm text-muted-foreground">Track your inventory flows and daily revenue metrics.</p>
               </div>
             </div>
-              
+
             <div className="flex flex-col xl:flex-row items-stretch xl:items-center gap-3 w-full">
               <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-2 w-full lg:w-auto">
                 <div className="p-1.5 rounded-sm flex items-center shadow-none border h-11 no-scrollbar overflow-x-auto bg-muted">
                   {["Today", "This Week", "This Month", "Custom"].map((t) => (
-                    <button 
+                    <button
                       key={t}
-                      onClick={() => setTimeframe(t as any)} 
+                      onClick={() => setTimeframe(t as any)}
                       className={cn("whitespace-nowrap flex-1 lg:flex-none px-4 lg:px-6 py-1.5 rounded-sm text-sm font-bold transition-all", timeframe === t ? "bg-primary text-white shadow-none" : "text-muted-foreground hover:text-foreground hover:bg-primary/10")}
                     >
                       {t}
@@ -294,7 +294,7 @@ export default function ShopDashboard() {
                     <AdvancedDatePicker value={customEnd} onChange={(val) => setCustomEnd(val)} placeholder="End Date" />
                   </div>
                 )}
-                
+
                 <Dialog>
                   <DialogTrigger asChild>
                     <Button variant="outline" className="h-11 rounded-sm font-bold bg-card border border-border shadow-none hover:text-primary hover:border-primary/30 px-4 flex items-center gap-2 w-full xl:w-auto">
@@ -309,42 +309,42 @@ export default function ShopDashboard() {
                   </DialogContent>
                 </Dialog>
               </div>
-          </div>
+            </div>
           </div>
 
           {/* NET RESULT DOMINANT CARD AND BREAKDOWN */}
           <div className="mb-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card className={cn("col-span-1 lg:col-span-1 border shadow-none bg-card relative overflow-hidden flex flex-col items-center justify-center p-8", kpis.netResultVal >= 0 ? "border-l-4 border-l-success rounded-sm" : "border-l-4 border-l-destructive rounded-sm")}>
-               <p className={cn("text-sm font-bold tracking-[0.2em] mb-2 uppercase", kpis.netResultVal >= 0 ? "text-success/80" : "text-destructive/80")}>Net Result</p>
-               <h2 className={cn("text-4xl lg:text-5xl font-black tracking-tighter", kpis.netResultVal >= 0 ? "text-success" : "text-destructive")}>
-                 {isLoading ? <Skeleton className="w-32 h-12" /> : `${kpis.netResultVal < 0 ? "-" : ""}₹${Math.abs(kpis.netResultVal).toLocaleString("en-IN")}`}
-               </h2>
-               <p className={cn("mt-3 text-xs font-semibold uppercase tracking-wider", kpis.netResultVal >= 0 ? "text-success/90" : "text-destructive/90")}>
-                 {kpis.netResultVal >= 0 ? "Profit Generated" : "Loss Incurred"}
-               </p>
-               <div className={cn("absolute right-[-24px] bottom-[-24px] opacity-[0.08] pointer-events-none", kpis.netResultVal >= 0 ? "text-success" : "text-destructive")}>
-                 <Activity className="w-48 h-48" />
-               </div>
+              <p className={cn("text-sm font-bold tracking-[0.2em] mb-2 uppercase", kpis.netResultVal >= 0 ? "text-success/80" : "text-destructive/80")}>Net Result</p>
+              <h2 className={cn("text-4xl lg:text-5xl font-black tracking-tighter", kpis.netResultVal >= 0 ? "text-success" : "text-destructive")}>
+                {isLoading ? <Skeleton className="w-32 h-12" /> : `${kpis.netResultVal < 0 ? "-" : ""}₹${Math.abs(kpis.netResultVal).toLocaleString("en-IN")}`}
+              </h2>
+              <p className={cn("mt-3 text-xs font-semibold uppercase tracking-wider", kpis.netResultVal >= 0 ? "text-success/90" : "text-destructive/90")}>
+                {kpis.netResultVal >= 0 ? "Profit Generated" : "Loss Incurred"}
+              </p>
+              <div className={cn("absolute right-[-24px] bottom-[-24px] opacity-[0.08] pointer-events-none", kpis.netResultVal >= 0 ? "text-success" : "text-destructive")}>
+                <Activity className="w-48 h-48" />
+              </div>
             </Card>
 
             <div className="col-span-1 lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-6">
-               <Card className="rounded-sm border shadow-none bg-card flex flex-col justify-center">
-                 <CardContent className="p-6">
-                   <p className="text-sm text-info/80 font-bold tracking-wide uppercase mb-4">Total Sales</p>
-                   <h3 className="text-4xl md:text-5xl font-black text-info tracking-tight">
-                     {isLoading ? <Skeleton className="w-32 h-12" /> : `₹${kpis.totalSalesVal.toLocaleString("en-IN")}`}
-                   </h3>
-                 </CardContent>
-               </Card>
-               <Card className="rounded-sm border shadow-none bg-card flex flex-col justify-center">
-                 <CardContent className="p-6">
-                   <p className="text-sm text-destructive/80 font-bold tracking-wide uppercase mb-4">Total Expenses</p>
-                   <h3 className="text-4xl md:text-5xl font-black text-destructive tracking-tight">
-                     {isLoading ? <Skeleton className="w-32 h-12" /> : `₹${kpis.totalExpensesVal.toLocaleString("en-IN")}`}
-                   </h3>
-                   <p className="text-xs text-destructive/60 mt-2 font-medium">Includes Discounts & Operational Cost</p>
-                 </CardContent>
-               </Card>
+              <Card className="rounded-sm border shadow-none bg-card flex flex-col justify-center">
+                <CardContent className="p-6">
+                  <p className="text-sm text-info/80 font-bold tracking-wide uppercase mb-4">Total Sales</p>
+                  <h3 className="text-4xl md:text-5xl font-black text-info tracking-tight">
+                    {isLoading ? <Skeleton className="w-32 h-12" /> : `₹${kpis.totalSalesVal.toLocaleString("en-IN")}`}
+                  </h3>
+                </CardContent>
+              </Card>
+              <Card className="rounded-sm border shadow-none bg-card flex flex-col justify-center">
+                <CardContent className="p-6">
+                  <p className="text-sm text-destructive/80 font-bold tracking-wide uppercase mb-4">Total Expenses</p>
+                  <h3 className="text-4xl md:text-5xl font-black text-destructive tracking-tight">
+                    {isLoading ? <Skeleton className="w-32 h-12" /> : `₹${kpis.totalExpensesVal.toLocaleString("en-IN")}`}
+                  </h3>
+                  <p className="text-xs text-destructive/60 mt-2 font-medium">Includes Discounts & Operational Cost</p>
+                </CardContent>
+              </Card>
             </div>
           </div>
 
@@ -357,7 +357,7 @@ export default function ShopDashboard() {
             </Card>
 
             <Card className="rounded-sm border border-border bg-card shadow-none hover:bg-card-hover transition-all">
-               <CardContent className="p-5 pl-6 border-l-4 border-l-gray-500">
+              <CardContent className="p-5 pl-6 border-l-4 border-l-gray-500">
                 <p className="text-xs text-muted-foreground font-medium">Cash Received</p>
                 <h3 className="text-2xl font-bold tracking-tight mt-1">{isLoading ? <Skeleton className="w-20 h-6" /> : `₹${kpis.cash.toLocaleString("en-IN")}`}</h3>
               </CardContent>
@@ -440,7 +440,7 @@ export default function ShopDashboard() {
                       <LineChart data={charts.chartRevenueList} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
                         <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--chart-text)' }} dy={10} />
-                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--chart-text)' }} tickFormatter={(value) => `₹${value/1000}k`} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--chart-text)' }} tickFormatter={(value) => `₹${value / 1000}k`} />
                         <RechartsTooltip formatter={(value) => `₹${Number(value).toLocaleString()}`} />
                         <Line type="monotone" dataKey="revenue" name="Revenue" stroke="var(--primary)" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: 'var(--primary)' }} activeDot={{ r: 6 }} />
                       </LineChart>

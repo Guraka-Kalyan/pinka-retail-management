@@ -284,8 +284,8 @@ export default function Preparation() {
             { header: "Ref ID", accessor: (r: any) => r.refId || r.billId },
             { header: "Bone Used (kg)", accessor: (r: any) => `${r.boneUsed || 0}` },
             { header: "Boneless Used (kg)", accessor: (r: any) => `${r.bonelessUsed || 0}` },
-            { header: "Fry Prep (kg)", accessor: (r: any) => `${r.fry || 0}` },
-            { header: "Curry Prep (kg)", accessor: (r: any) => `${r.curry || 0}` },
+            { header: "Fry Prep (g)", accessor: (r: any) => `${parseFloat(((Number(r.fry) || 0) * 1000).toFixed(2))} g` },
+            { header: "Curry Prep (g)", accessor: (r: any) => `${parseFloat(((Number(r.curry) || 0) * 1000).toFixed(2))} g` },
             {
               header: "Actions",
               accessor: (r: any) => (
