@@ -174,16 +174,16 @@ export default function InventoryOut({
     const availMixed = liveStock?.mixedStock || 0;
     const availFryKg = liveStock?.fryStock || 0;
     const availCurryKg = liveStock?.curryStock || 0;
-    const availFry = availFryKg * 1000;   // display in grams
-    const availCurry = availCurryKg * 1000; // display in grams
-    const totalStock = availBone + availBoneless + availMixed + availFryKg + availCurryKg;
+    const availFry = Math.round(availFryKg * 1000);    // display in grams, no float junk
+    const availCurry = Math.round(availCurryKg * 1000);   // display in grams, no float junk
+    const totalStock = parseFloat((availBone + availBoneless + availMixed + availFryKg + availCurryKg).toFixed(3));
 
     // 4. Sold KPIs — frySold/currySold stored as kg in DB, display as grams
-    const totalBoneSold = filtered.reduce((s: number, r: any) => s + (Number(r.boneSold) || 0), 0);
-    const totalBonelessSold = filtered.reduce((s: number, r: any) => s + (Number(r.bonelessSold) || 0), 0);
-    const totalMixedSold = filtered.reduce((s: number, r: any) => s + (Number(r.mixedSold) || 0), 0);
-    const totalFrySold = filtered.reduce((s: number, r: any) => s + (Number(r.frySold) || 0), 0) * 1000;
-    const totalCurrySold = filtered.reduce((s: number, r: any) => s + (Number(r.currySold) || 0), 0) * 1000;
+    const totalBoneSold = parseFloat(filtered.reduce((s: number, r: any) => s + (Number(r.boneSold) || 0), 0).toFixed(3));
+    const totalBonelessSold = parseFloat(filtered.reduce((s: number, r: any) => s + (Number(r.bonelessSold) || 0), 0).toFixed(3));
+    const totalMixedSold = parseFloat(filtered.reduce((s: number, r: any) => s + (Number(r.mixedSold) || 0), 0).toFixed(3));
+    const totalFrySold = Math.round(filtered.reduce((s: number, r: any) => s + (Number(r.frySold) || 0), 0) * 1000);
+    const totalCurrySold = Math.round(filtered.reduce((s: number, r: any) => s + (Number(r.currySold) || 0), 0) * 1000);
     const totalCash = filtered.reduce((s: number, r: any) => s + (Number(r.cash) || 0), 0);
     const totalPhonePe = filtered.reduce((s: number, r: any) => s + (Number(r.phonePe) || 0), 0);
     const discountedAmount = filtered.reduce((s: number, r: any) => s + (Number(r.discountGiven) || 0), 0);
@@ -353,7 +353,7 @@ export default function InventoryOut({
           <h3 className="text-[10px] sm:text-sm font-bold text-muted-foreground uppercase tracking-wider mb-2 sm:mb-3">Total Available Stock & Preparation</h3>
           <div className="grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4">
             {isLoading ? (
-              [1,2,3,4,5,6].map(i => <StatCardSkeleton key={i} />)
+              [1, 2, 3, 4, 5, 6].map(i => <StatCardSkeleton key={i} />)
             ) : (
               <>
                 <StatCard title="Overall Total" value={`${stockKpis.totalStock} kg`} icon={null} />
@@ -371,7 +371,7 @@ export default function InventoryOut({
           <h3 className="text-[10px] sm:text-sm font-bold text-muted-foreground uppercase tracking-wider mb-2 sm:mb-3">Total Stock Sold</h3>
           <div className="grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4">
             {isLoading ? (
-              [1,2,3,4,5,6].map(i => <StatCardSkeleton key={i} />)
+              [1, 2, 3, 4, 5, 6].map(i => <StatCardSkeleton key={i} />)
             ) : (
               <>
                 <StatCard title="Overall Total Sold" className="bg-card border-dashed" value={`${soldKpis.totalBoneSold + soldKpis.totalBonelessSold + soldKpis.totalMixedSold} kg`} icon={null} />
@@ -386,19 +386,19 @@ export default function InventoryOut({
         </div>
 
         <div>
-           <h3 className="text-[10px] sm:text-sm font-bold text-muted-foreground uppercase tracking-wider mb-2 sm:mb-3">Total Sales Amount</h3>
-           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
-             {isLoading ? (
-                [1,2,3,4].map(i => <StatCardSkeleton key={i} />)
-             ) : (
-                <>
-                  <StatCard title="Total Amount Received (₹)" value={`₹${(soldKpis.totalCash + soldKpis.totalPhonePe).toLocaleString("en-IN")}`} icon={null} />
-                  <StatCard title="Cash Received" value={`₹${soldKpis.totalCash.toLocaleString("en-IN")}`} icon={null} />
-                  <StatCard title="PhonePe Received" value={`₹${soldKpis.totalPhonePe.toLocaleString("en-IN")}`} icon={null} />
-                  <StatCard title="Discount Given" value={`₹${soldKpis.discountedAmount.toLocaleString("en-IN")}`} icon={null} />
-                </>
-             )}
-           </div>
+          <h3 className="text-[10px] sm:text-sm font-bold text-muted-foreground uppercase tracking-wider mb-2 sm:mb-3">Total Sales Amount</h3>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+            {isLoading ? (
+              [1, 2, 3, 4].map(i => <StatCardSkeleton key={i} />)
+            ) : (
+              <>
+                <StatCard title="Total Amount Received (₹)" value={`₹${(soldKpis.totalCash + soldKpis.totalPhonePe).toLocaleString("en-IN")}`} icon={null} />
+                <StatCard title="Cash Received" value={`₹${soldKpis.totalCash.toLocaleString("en-IN")}`} icon={null} />
+                <StatCard title="PhonePe Received" value={`₹${soldKpis.totalPhonePe.toLocaleString("en-IN")}`} icon={null} />
+                <StatCard title="Discount Given" value={`₹${soldKpis.discountedAmount.toLocaleString("en-IN")}`} icon={null} />
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -435,24 +435,24 @@ export default function InventoryOut({
                 ].map((item) => (
                   <div key={item.label} className="grid grid-cols-2 lg:grid-cols-3 gap-2 lg:gap-6 p-3 lg:p-4 rounded-sm border border-border" style={{ backgroundColor: 'var(--table-row-2)' }}>
                     <div className="space-y-1 lg:space-y-2">
-                       <Label className="text-xs lg:text-lg font-semibold text-muted-foreground">{item.label} Sold ({item.unit})</Label>
-                       <Input
-                         ref={itemRefs[item.label] as any}
-                         type="number"
-                         value={item.val}
-                         onChange={(e) => item.setter(e.target.value)}
-                         placeholder="0"
-                         className="h-10 lg:h-[56px] text-lg lg:text-2xl font-bold border-2 focus-visible:ring-primary focus-visible:border-primary px-3 lg:px-4 shadow-none bg-background"
-                       />
-                     </div>
-                     <div className="space-y-1 lg:space-y-2">
-                       <Label className="text-xs lg:text-lg font-semibold text-muted-foreground">Price (₹/kg)</Label>
-                       <Input readOnly className="h-10 lg:h-[56px] text-base lg:text-xl bg-muted/30 font-bold border-2 text-foreground" value={item.price} />
-                     </div>
-                     <div className="space-y-1 lg:space-y-2 col-span-2 lg:col-span-1 border-t lg:border-t-0 pt-2 lg:pt-0">
-                       <Label className="text-xs lg:text-lg font-semibold text-muted-foreground">Total (₹)</Label>
-                       <Input readOnly className="h-10 lg:h-[56px] text-lg lg:text-2xl font-black border-2 border-info/30 text-info" value={item.total} style={{ backgroundColor: 'var(--primary-light-bg)' }} />
-                     </div>
+                      <Label className="text-xs lg:text-lg font-semibold text-muted-foreground">{item.label} Sold ({item.unit})</Label>
+                      <Input
+                        ref={itemRefs[item.label] as any}
+                        type="number"
+                        value={item.val}
+                        onChange={(e) => item.setter(e.target.value)}
+                        placeholder="0"
+                        className="h-10 lg:h-[56px] text-lg lg:text-2xl font-bold border-2 focus-visible:ring-primary focus-visible:border-primary px-3 lg:px-4 shadow-none bg-background"
+                      />
+                    </div>
+                    <div className="space-y-1 lg:space-y-2">
+                      <Label className="text-xs lg:text-lg font-semibold text-muted-foreground">Price (₹/kg)</Label>
+                      <Input readOnly className="h-10 lg:h-[56px] text-base lg:text-xl bg-muted/30 font-bold border-2 text-foreground" value={item.price} />
+                    </div>
+                    <div className="space-y-1 lg:space-y-2 col-span-2 lg:col-span-1 border-t lg:border-t-0 pt-2 lg:pt-0">
+                      <Label className="text-xs lg:text-lg font-semibold text-muted-foreground">Total (₹)</Label>
+                      <Input readOnly className="h-10 lg:h-[56px] text-lg lg:text-2xl font-black border-2 border-info/30 text-info" value={item.total} style={{ backgroundColor: 'var(--primary-light-bg)' }} />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -460,44 +460,44 @@ export default function InventoryOut({
 
             {/* Section C */}
             <div className="space-y-4 lg:space-y-6">
-               <h3 className="text-base lg:text-xl font-bold text-muted-foreground uppercase flex items-center gap-2 lg:gap-3 border-b pb-2 lg:pb-3 mb-2 lg:mb-4">
-                 <Wallet className="h-5 w-5 lg:h-6 lg:w-6" /> Section C - Payment
-               </h3>
-               <div className="space-y-2 lg:space-y-6">
-                 <div className="p-3 lg:p-6 rounded-sm border-2 border-info/20 shadow-none flex justify-between items-center relative overflow-hidden" style={{ backgroundColor: 'var(--primary-light-bg)' }}>
-                   <div className="absolute top-0 left-0 w-1.5 h-full bg-info" />
-                   <span className="font-bold text-info/80 justify-start pl-2 uppercase tracking-wide lg:tracking-widest text-xs lg:text-sm">Bill Total</span>
-                   <span className="text-2xl lg:text-4xl font-black text-info flex items-center tracking-tight"><IndianRupee className="w-5 h-5 lg:w-8 lg:h-8 mr-1" />{grandTotalAmt.toLocaleString("en-IN")}</span>
-                 </div>
-                 <div className="grid grid-cols-2 gap-2 lg:gap-6">
-                   <div className="space-y-1 lg:space-y-2 p-3 lg:p-5 rounded-sm border border-border" style={{ backgroundColor: 'var(--table-row-2)' }}>
-                     <Label className="text-xs lg:text-lg font-semibold block mb-1 lg:mb-2 text-muted-foreground">Cash (₹)</Label>
-                     <Input type="number" value={cash} onChange={(e) => setCash(e.target.value)} placeholder="0" className="h-10 lg:h-[60px] text-lg lg:text-3xl font-bold border-2 bg-background" />
-                   </div>
-                   <div className="space-y-1 lg:space-y-2 p-3 lg:p-5 rounded-sm border border-border" style={{ backgroundColor: 'var(--table-row-2)' }}>
-                     <Label className="text-xs lg:text-lg font-semibold block mb-1 lg:mb-2 text-muted-foreground">PhonePe (₹)</Label>
-                     <Input type="number" value={phonePe} onChange={(e) => setPhonePe(e.target.value)} placeholder="0" className="h-10 lg:h-[60px] text-lg lg:text-3xl font-bold border-2 text-info bg-background" />
-                   </div>
-                 </div>
-                 <div className="grid grid-cols-2 gap-2 lg:block lg:space-y-6">
-                   <div className="p-3 lg:p-5 rounded-sm flex flex-col lg:flex-row justify-center lg:justify-between items-start lg:items-center shadow-none border-2 border-destructive badge-error">
-                     <span className="font-extrabold uppercase tracking-widest text-[10px] lg:text-lg mb-1 lg:mb-0">Discount:</span>
-                     <span className="text-lg lg:text-3xl font-black flex items-center"><IndianRupee className="w-4 h-4 mr-1" />{discountGivenVal.toLocaleString("en-IN")}</span>
-                   </div>
-                   <div className="p-3 lg:p-6 rounded-sm border-2 border-success/20 shadow-none flex flex-col lg:flex-row justify-center lg:justify-between items-start lg:items-center relative overflow-hidden bg-success/5 h-full">
-                     <div className="absolute top-0 left-0 w-1.5 h-full bg-success" />
-                     <span className="font-bold text-success/80 justify-start lg:pl-2 ml-2 lg:ml-0 uppercase tracking-wide lg:tracking-widest text-[10px] lg:text-sm mb-1 lg:mb-0">Amount Paid</span>
-                     <span className="text-xl lg:text-4xl font-black text-success flex items-center tracking-tight ml-2 lg:ml-0"><IndianRupee className="w-4 h-4 mr-1" />{paymentTotal.toLocaleString("en-IN")}</span>
-                   </div>
-                 </div>
-               </div>
+              <h3 className="text-base lg:text-xl font-bold text-muted-foreground uppercase flex items-center gap-2 lg:gap-3 border-b pb-2 lg:pb-3 mb-2 lg:mb-4">
+                <Wallet className="h-5 w-5 lg:h-6 lg:w-6" /> Section C - Payment
+              </h3>
+              <div className="space-y-2 lg:space-y-6">
+                <div className="p-3 lg:p-6 rounded-sm border-2 border-info/20 shadow-none flex justify-between items-center relative overflow-hidden" style={{ backgroundColor: 'var(--primary-light-bg)' }}>
+                  <div className="absolute top-0 left-0 w-1.5 h-full bg-info" />
+                  <span className="font-bold text-info/80 justify-start pl-2 uppercase tracking-wide lg:tracking-widest text-xs lg:text-sm">Bill Total</span>
+                  <span className="text-2xl lg:text-4xl font-black text-info flex items-center tracking-tight"><IndianRupee className="w-5 h-5 lg:w-8 lg:h-8 mr-1" />{grandTotalAmt.toLocaleString("en-IN")}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 lg:gap-6">
+                  <div className="space-y-1 lg:space-y-2 p-3 lg:p-5 rounded-sm border border-border" style={{ backgroundColor: 'var(--table-row-2)' }}>
+                    <Label className="text-xs lg:text-lg font-semibold block mb-1 lg:mb-2 text-muted-foreground">Cash (₹)</Label>
+                    <Input type="number" value={cash} onChange={(e) => setCash(e.target.value)} placeholder="0" className="h-10 lg:h-[60px] text-lg lg:text-3xl font-bold border-2 bg-background" />
+                  </div>
+                  <div className="space-y-1 lg:space-y-2 p-3 lg:p-5 rounded-sm border border-border" style={{ backgroundColor: 'var(--table-row-2)' }}>
+                    <Label className="text-xs lg:text-lg font-semibold block mb-1 lg:mb-2 text-muted-foreground">PhonePe (₹)</Label>
+                    <Input type="number" value={phonePe} onChange={(e) => setPhonePe(e.target.value)} placeholder="0" className="h-10 lg:h-[60px] text-lg lg:text-3xl font-bold border-2 text-info bg-background" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 lg:block lg:space-y-6">
+                  <div className="p-3 lg:p-5 rounded-sm flex flex-col lg:flex-row justify-center lg:justify-between items-start lg:items-center shadow-none border-2 border-destructive badge-error">
+                    <span className="font-extrabold uppercase tracking-widest text-[10px] lg:text-lg mb-1 lg:mb-0">Discount:</span>
+                    <span className="text-lg lg:text-3xl font-black flex items-center"><IndianRupee className="w-4 h-4 mr-1" />{discountGivenVal.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="p-3 lg:p-6 rounded-sm border-2 border-success/20 shadow-none flex flex-col lg:flex-row justify-center lg:justify-between items-start lg:items-center relative overflow-hidden bg-success/5 h-full">
+                    <div className="absolute top-0 left-0 w-1.5 h-full bg-success" />
+                    <span className="font-bold text-success/80 justify-start lg:pl-2 ml-2 lg:ml-0 uppercase tracking-wide lg:tracking-widest text-[10px] lg:text-sm mb-1 lg:mb-0">Amount Paid</span>
+                    <span className="text-xl lg:text-4xl font-black text-success flex items-center tracking-tight ml-2 lg:ml-0"><IndianRupee className="w-4 h-4 mr-1" />{paymentTotal.toLocaleString("en-IN")}</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-          
+
           <div className="flex flex-col md:flex-row gap-3 md:gap-6 mt-6 md:mt-10 pt-4 md:pt-6 border-t">
-             <Button onClick={handleSaveSales} disabled={saveSalesMutation.isPending} className="flex-1 h-12 md:h-[60px] text-lg md:text-xl bg-primary hover:bg-primary/80 font-bold text-white shadow-none">
-               {saveSalesMutation.isPending ? "Saving..." : "Save Sales Entry"}
-             </Button>
+            <Button onClick={handleSaveSales} disabled={saveSalesMutation.isPending} className="flex-1 h-12 md:h-[60px] text-lg md:text-xl bg-primary hover:bg-primary/80 font-bold text-white shadow-none">
+              {saveSalesMutation.isPending ? "Saving..." : "Save Sales Entry"}
+            </Button>
           </div>
         </div>
       </div>
@@ -564,122 +564,122 @@ export default function InventoryOut({
                 ))}
               </div>
             </div>
-            
+
             <div>
               <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2 border-b pb-2 mb-3"><Wallet className="h-4 w-4" /> Section C — Payment</h3>
               <div className="space-y-3">
-                 <div className="p-3 rounded-sm border-2 border-primary/20 flex justify-between items-center bg-[var(--primary-light-bg)]">
-                   <span className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Bill Total</span>
-                   <span className="text-2xl font-black text-primary flex items-center"><IndianRupee className="w-5 h-5 mr-0.5" />{grandTotalAmt.toLocaleString("en-IN")}</span>
-                 </div>
-                 <div className="grid grid-cols-2 gap-2">
-                   <div className="space-y-1 p-3 rounded-sm border border-border bg-[var(--table-row-2)]">
-                     <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Cash (₹)</Label>
-                     <Input type="number" value={cash} onChange={(e) => setCash(e.target.value)} className="h-12 text-2xl font-bold border-2 px-3" />
-                   </div>
-                   <div className="space-y-1 p-3 rounded-sm border border-border bg-[var(--table-row-2)]">
-                     <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">PhonePe (₹)</Label>
-                     <Input type="number" value={phonePe} onChange={(e) => setPhonePe(e.target.value)} className="h-12 text-2xl font-bold border-2 px-3 text-primary" />
-                   </div>
-                 </div>
-                 <div className="grid grid-cols-2 gap-2">
-                   <div className="p-3 rounded-sm flex flex-col justify-center items-start shadow-none border-2 border-destructive/30 bg-destructive/5">
-                     <span className="font-extrabold uppercase tracking-wider text-[10px] text-destructive/80 mb-1">Discount</span>
-                     <span className="text-xl font-black text-destructive flex items-center"><IndianRupee className="w-4 h-4 mr-1" />{discountGivenVal.toLocaleString("en-IN")}</span>
-                   </div>
-                   <div className="p-3 rounded-sm border-2 border-success/20 shadow-none flex flex-col justify-center items-start relative overflow-hidden bg-success/5">
-                     <div className="absolute top-0 left-0 w-1 h-full bg-success" />
-                     <span className="font-bold text-success/80 pl-2 uppercase tracking-wider text-[10px] mb-1">Amount Paid</span>
-                     <span className="text-xl font-black text-success flex items-center pl-2"><IndianRupee className="w-4 h-4 mr-1" />{paymentTotal.toLocaleString("en-IN")}</span>
-                   </div>
-                 </div>
+                <div className="p-3 rounded-sm border-2 border-primary/20 flex justify-between items-center bg-[var(--primary-light-bg)]">
+                  <span className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Bill Total</span>
+                  <span className="text-2xl font-black text-primary flex items-center"><IndianRupee className="w-5 h-5 mr-0.5" />{grandTotalAmt.toLocaleString("en-IN")}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1 p-3 rounded-sm border border-border bg-[var(--table-row-2)]">
+                    <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Cash (₹)</Label>
+                    <Input type="number" value={cash} onChange={(e) => setCash(e.target.value)} className="h-12 text-2xl font-bold border-2 px-3" />
+                  </div>
+                  <div className="space-y-1 p-3 rounded-sm border border-border bg-[var(--table-row-2)]">
+                    <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">PhonePe (₹)</Label>
+                    <Input type="number" value={phonePe} onChange={(e) => setPhonePe(e.target.value)} className="h-12 text-2xl font-bold border-2 px-3 text-primary" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-3 rounded-sm flex flex-col justify-center items-start shadow-none border-2 border-destructive/30 bg-destructive/5">
+                    <span className="font-extrabold uppercase tracking-wider text-[10px] text-destructive/80 mb-1">Discount</span>
+                    <span className="text-xl font-black text-destructive flex items-center"><IndianRupee className="w-4 h-4 mr-1" />{discountGivenVal.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="p-3 rounded-sm border-2 border-success/20 shadow-none flex flex-col justify-center items-start relative overflow-hidden bg-success/5">
+                    <div className="absolute top-0 left-0 w-1 h-full bg-success" />
+                    <span className="font-bold text-success/80 pl-2 uppercase tracking-wider text-[10px] mb-1">Amount Paid</span>
+                    <span className="text-xl font-black text-success flex items-center pl-2"><IndianRupee className="w-4 h-4 mr-1" />{paymentTotal.toLocaleString("en-IN")}</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
           <div className="px-5 pb-5 sticky bottom-0 bg-card pt-3 border-t">
-             <Button onClick={handleSaveSales} disabled={saveSalesMutation.isPending} className="w-full h-12 text-base bg-primary hover:bg-primary/80 font-bold text-white shadow-none">
-               {saveSalesMutation.isPending
-                 ? (editingRecord ? "Updating..." : "Saving...")
-                 : (editingRecord ? "Update Entry" : "Save Sales Entry")}
-             </Button>
-             {editingRecord && (
-               <button className="w-full text-xs text-muted-foreground mt-1 hover:text-destructive font-semibold"
-                 onClick={() => { setEditingRecord(null); setBoneSold(""); setBonelessSold(""); setFrySold(""); setCurrySold(""); setMixedSold(""); setCash(""); setPhonePe(""); }}>
-                 ✕ Cancel Edit
-               </button>
-             )}
-           </div>
+            <Button onClick={handleSaveSales} disabled={saveSalesMutation.isPending} className="w-full h-12 text-base bg-primary hover:bg-primary/80 font-bold text-white shadow-none">
+              {saveSalesMutation.isPending
+                ? (editingRecord ? "Updating..." : "Saving...")
+                : (editingRecord ? "Update Entry" : "Save Sales Entry")}
+            </Button>
+            {editingRecord && (
+              <button className="w-full text-xs text-muted-foreground mt-1 hover:text-destructive font-semibold"
+                onClick={() => { setEditingRecord(null); setBoneSold(""); setBonelessSold(""); setFrySold(""); setCurrySold(""); setMixedSold(""); setCash(""); setPhonePe(""); }}>
+                ✕ Cancel Edit
+              </button>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
       {/* Sales Log Table */}
       <div className="rounded-sm border bg-card shadow-none mb-8">
-         <div className="px-6 py-4 border-b flex items-center border-border" style={{ backgroundColor: 'var(--table-header)' }}>
-           <h2 className="text-lg font-black text-foreground uppercase tracking-wide">Daily Sales Log</h2>
-         </div>
-         <div className="p-2 border-b">
-           {isLoading ? (
-             <div className="p-4 space-y-3">
-               {[1,2,3,4].map(i => <Skeleton key={i} className="h-10 w-full" />)}
-             </div>
-           ) : (
-             <DataTable
-               isLoading={false}
-               columns={[
-                 { header: "Date", accessor: "date" },
-                 { header: "Bone (kg)", accessor: (r: OutRecord) => `${r.boneSold}` },
-                 { header: "Boneless (kg)", accessor: (r: OutRecord) => `${r.bonelessSold}` },
-                 { header: "Fry Sale (g)", accessor: (r: OutRecord) => `${Math.round((Number(r.frySold) || 0) * 1000)} g` },
-                 { header: "Curry Sale (g)", accessor: (r: OutRecord) => `${Math.round((Number(r.currySold) || 0) * 1000)} g` },
-                 { header: "Mixed Sale (kg)", accessor: (r: OutRecord) => `${r.mixedSold || 0}` },
-                 { header: "Total (₹)", accessor: (r: OutRecord) => `₹${r.total.toLocaleString("en-IN")}` },
-                 { header: "Discount (₹)", accessor: (r: OutRecord) => `₹${(r.discountGiven || 0).toLocaleString("en-IN")}` },
-                 { header: "Cash (₹)", accessor: (r: OutRecord) => `₹${r.cash.toLocaleString("en-IN")}` },
-                 { header: "PhonePe (₹)", accessor: (r: OutRecord) => `₹${r.phonePe.toLocaleString("en-IN")}` },
-                 { header: "Amount Paid (₹)", accessor: (r: OutRecord) => <strong className="text-primary">₹{(Number(r.cash || 0) + Number(r.phonePe || 0)).toLocaleString("en-IN")}</strong> },
-                 {
-                   header: "Bill",
-                   accessor: (r: OutRecord) => (
-                     <Button variant="outline" size="sm" className="h-7 px-2 text-[10px] uppercase font-bold text-primary" onClick={() => setSelectedBill(r)}>
-                       <Receipt className="h-3 w-3 mr-1" /> {r.billId}
-                     </Button>
-                   )
-                 },
-                 {
-                   header: "Actions",
-                   accessor: (r: OutRecord) => (
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10"
-                          title="Edit"
-                          onClick={() => {
-                            // Pre-fill form with existing sale values
-                            setBoneSold(String(r.boneSold ?? ""));
-                            setBonelessSold(String(r.bonelessSold ?? ""));
-                            setFrySold(String(Math.round((Number(r.frySold) || 0) * 1000)));
-                            setCurrySold(String(Math.round((Number(r.currySold) || 0) * 1000)));
-                            setMixedSold(String(r.mixedSold ?? ""));
-                            setCash(String(r.cash ?? ""));
-                            setPhonePe(String(r.phonePe ?? ""));
-                            setSalesDate(r.date || todayStr);
-                            // Open the form in edit mode
-                            setEditingRecord(r);
-                          }}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                          onClick={() => setDeleteTarget(r._id || r.id || "")}
-                          disabled={deleteSalesMutation.isPending}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                   )
-                 },
-               ]}
-               data={filteredRecords.filter((r: any) => !String(r.billId).startsWith("PREP"))}
-               pageSize={10}
-             />
-           )}
-         </div>
+        <div className="px-6 py-4 border-b flex items-center border-border" style={{ backgroundColor: 'var(--table-header)' }}>
+          <h2 className="text-lg font-black text-foreground uppercase tracking-wide">Daily Sales Log</h2>
+        </div>
+        <div className="p-2 border-b">
+          {isLoading ? (
+            <div className="p-4 space-y-3">
+              {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-10 w-full" />)}
+            </div>
+          ) : (
+            <DataTable
+              isLoading={false}
+              columns={[
+                { header: "Date", accessor: "date" },
+                { header: "Bone (kg)", accessor: (r: OutRecord) => `${r.boneSold}` },
+                { header: "Boneless (kg)", accessor: (r: OutRecord) => `${r.bonelessSold}` },
+                { header: "Fry Sale (g)", accessor: (r: OutRecord) => `${Math.round((Number(r.frySold) || 0) * 1000)} g` },
+                { header: "Curry Sale (g)", accessor: (r: OutRecord) => `${Math.round((Number(r.currySold) || 0) * 1000)} g` },
+                { header: "Mixed Sale (kg)", accessor: (r: OutRecord) => `${r.mixedSold || 0}` },
+                { header: "Total (₹)", accessor: (r: OutRecord) => `₹${r.total.toLocaleString("en-IN")}` },
+                { header: "Discount (₹)", accessor: (r: OutRecord) => `₹${(r.discountGiven || 0).toLocaleString("en-IN")}` },
+                { header: "Cash (₹)", accessor: (r: OutRecord) => `₹${r.cash.toLocaleString("en-IN")}` },
+                { header: "PhonePe (₹)", accessor: (r: OutRecord) => `₹${r.phonePe.toLocaleString("en-IN")}` },
+                { header: "Amount Paid (₹)", accessor: (r: OutRecord) => <strong className="text-primary">₹{(Number(r.cash || 0) + Number(r.phonePe || 0)).toLocaleString("en-IN")}</strong> },
+                {
+                  header: "Bill",
+                  accessor: (r: OutRecord) => (
+                    <Button variant="outline" size="sm" className="h-7 px-2 text-[10px] uppercase font-bold text-primary" onClick={() => setSelectedBill(r)}>
+                      <Receipt className="h-3 w-3 mr-1" /> {r.billId}
+                    </Button>
+                  )
+                },
+                {
+                  header: "Actions",
+                  accessor: (r: OutRecord) => (
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10"
+                        title="Edit"
+                        onClick={() => {
+                          // Pre-fill form with existing sale values
+                          setBoneSold(String(r.boneSold ?? ""));
+                          setBonelessSold(String(r.bonelessSold ?? ""));
+                          setFrySold(String(Math.round((Number(r.frySold) || 0) * 1000)));
+                          setCurrySold(String(Math.round((Number(r.currySold) || 0) * 1000)));
+                          setMixedSold(String(r.mixedSold ?? ""));
+                          setCash(String(r.cash ?? ""));
+                          setPhonePe(String(r.phonePe ?? ""));
+                          setSalesDate(r.date || todayStr);
+                          // Open the form in edit mode
+                          setEditingRecord(r);
+                        }}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                        onClick={() => setDeleteTarget(r._id || r.id || "")}
+                        disabled={deleteSalesMutation.isPending}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  )
+                },
+              ]}
+              data={filteredRecords.filter((r: any) => !String(r.billId).startsWith("PREP"))}
+              pageSize={10}
+            />
+          )}
+        </div>
       </div>
 
       {/* ── Bill Preview Modal ────────────────────────────────────────────── */}
@@ -771,28 +771,28 @@ export default function InventoryOut({
       </Dialog>
       {/* Stock Error Modal */}
       <Dialog open={!!stockError} onOpenChange={(open) => !open && setStockError(null)}>
-         <DialogContent className="sm:max-w-[400px]">
-           <DialogHeader>
-             <DialogTitle className="text-xl font-bold text-destructive">⚠️ Insufficient Stock</DialogTitle>
-           </DialogHeader>
-           <div className="py-2 space-y-4">
-             <p>Not enough <strong className="text-primary">{stockError?.item}</strong> stock available.</p>
-             <div className="bg-muted p-4 rounded-md space-y-2 border">
-               <div className="flex justify-between items-center text-sm">
-                 <span className="text-muted-foreground font-semibold">Available:</span>
-                 <span className="font-bold text-lg">{stockError?.available.toFixed(2)} {(stockError?.item === "Fry" || stockError?.item === "Curry") ? "g" : "kg"}</span>
-               </div>
-               <div className="flex justify-between items-center text-sm">
-                 <span className="text-muted-foreground font-semibold">Requested:</span>
-                 <span className="text-destructive font-bold text-lg">{stockError?.requested.toFixed(2)} {(stockError?.item === "Fry" || stockError?.item === "Curry") ? "g" : "kg"}</span>
-               </div>
-             </div>
-           </div>
-           <DialogFooter>
-             <Button className="w-full bg-[#FF6B00] text-white font-bold h-12 text-lg" onClick={() => setStockError(null)}>Fix Quantity</Button>
-           </DialogFooter>
-         </DialogContent>
-       </Dialog>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-destructive">⚠️ Insufficient Stock</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-4">
+            <p>Not enough <strong className="text-primary">{stockError?.item}</strong> stock available.</p>
+            <div className="bg-muted p-4 rounded-md space-y-2 border">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground font-semibold">Available:</span>
+                <span className="font-bold text-lg">{stockError?.available.toFixed(2)} {(stockError?.item === "Fry" || stockError?.item === "Curry") ? "g" : "kg"}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground font-semibold">Requested:</span>
+                <span className="text-destructive font-bold text-lg">{stockError?.requested.toFixed(2)} {(stockError?.item === "Fry" || stockError?.item === "Curry") ? "g" : "kg"}</span>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button className="w-full bg-[#FF6B00] text-white font-bold h-12 text-lg" onClick={() => setStockError(null)}>Fix Quantity</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
